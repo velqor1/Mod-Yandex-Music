@@ -13,8 +13,8 @@ Icon "..\assets\icon.ico"
 
 VIProductVersion "5.124.1.0"
 VIAddVersionKey "ProductName" "Яндекс Музыка Mod"
-VIAddVersionKey "CompanyName" "alexis0eu"
-VIAddVersionKey "LegalCopyright" "alexis0eu"
+VIAddVersionKey "CompanyName" "bibikovaleksej52-eng"
+VIAddVersionKey "LegalCopyright" "bibikovaleksej52-eng"
 VIAddVersionKey "FileDescription" "Яндекс Музыка Mod v1.3.13"
 VIAddVersionKey "FileVersion" "5.124.1.0"
 
@@ -64,7 +64,7 @@ Section "MainSection" SEC01
     DetailPrint "Завершение установки..."
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\YandexMusic" "DisplayName" "Яндекс Музыка Mod v1.3.5"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\YandexMusic" "DisplayVersion" "1.3.5"
-    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\YandexMusic" "Publisher" "alexis0eu"
+    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\YandexMusic" "Publisher" "bibikovaleksej52-eng"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\YandexMusic" "DisplayIcon" "$INSTDIR\resources\assets\icon.ico"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\YandexMusic" "InstallLocation" "$INSTDIR"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\YandexMusic" "UninstallString" '"$INSTDIR\Uninstall Яндекс Музыка.exe"'
