@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/banner.jpg" alt="Яндекс Музыка Мод Обложка" width="100%" />
+  <img src="assets/banner.png" alt="Яндекс Музыка Мод Обложка" width="100%" />
 </p>
 
 <p align="center">
@@ -73,14 +73,29 @@
 
 ## 📸 Скриншоты мода
 
-### 🎮 Игровой HUD-оверлей поверх игр и окон (`Ctrl + Shift + O`):
+### 🌊 Главный экран «Моя Волна» и кастомный шрифт:
 <p align="center">
-  <img src="assets/hud-overlay.png" alt="Gaming HUD Overlay" width="550" />
+  <img src="assets/banner.png" alt="Моя Волна и кастомный шрифт" width="100%" />
 </p>
 
-### 🎤 Плавающее синхронное Караоке с подсветкой строк (`Ctrl + Shift + L`):
+### 🎤 Синхронное Караоке в реальном времени и полноэкранный плеер:
 <p align="center">
-  <img src="assets/karaoke.png" alt="Floating Karaoke" width="700" />
+  <img src="assets/karaoke-full.png" alt="Полноэкранный плеер с караоке" width="100%" />
+</p>
+
+### ⏱️ Окно текста песен с точной подстройкой синхронизации (`-0.5s / +0.5s`):
+<p align="center">
+  <img src="assets/lyrics-sync.png" alt="Синхронизация текста песен" width="420" />
+</p>
+
+### 🎮 Компактный игровой HUD-оверлей поверх окон и игр (`Ctrl + Shift + O`):
+<p align="center">
+  <img src="assets/hud-overlay.png" alt="Gaming HUD Overlay" width="450" />
+</p>
+
+### 💬 Плавающий Караоке-виджет на рабочем столе (`Ctrl + Shift + L`):
+<p align="center">
+  <img src="assets/karaoke.png" alt="Floating Karaoke Pill" width="600" />
 </p>
 
 ### 💎 Меню настроек мода — Матовое темное стекло (Modern Glass):
@@ -88,7 +103,7 @@
   <img src="assets/frosted-menu.png" alt="Frosted Dark Glass Settings" width="650" />
 </p>
 
-### 🔤 Кастомные шрифты (Terraria, Minecraft, JetBrains Mono и др.):
+### 🔤 Кастомные шрифты (Terraria, Minecraft, JetBrains Mono, Dela Gothic и др.):
 <p align="center">
   <img src="assets/fonts-menu.png" alt="Custom Fonts Settings" width="650" />
 </p>
