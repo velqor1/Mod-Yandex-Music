@@ -379,7 +379,7 @@ function findActiveLyricIndex(pos) {
   const effectivePos = pos + currentTrackOffset;
   let activeIdx = -1;
   for (let i = 0; i < overlayLyrics.length; i++) {
-    if (overlayLyrics[i].time <= effectivePos + 0.15) {
+    if (overlayLyrics[i].time <= effectivePos + 0.35) {
       activeIdx = i;
     } else {
       break;
@@ -837,6 +837,7 @@ if (amVolTrack) {
 
   amVolTrack.addEventListener("mousedown", (e) => {
     isDraggingVol = true;
+    if (amVolWrapper) amVolWrapper.classList.add("open");
     if (amVolPopup) amVolPopup.classList.add("active");
     updateVolFromEvent(e);
   });
@@ -865,6 +866,8 @@ volElements.forEach((el) => {
 
 if (btnLike) {
   btnLike.addEventListener("click", () => {
+    const isLiked = btnLike.classList.toggle("liked");
+    if (isLiked && btnDislike) btnDislike.classList.remove("disliked");
     if (window.overlayApi) {
       const sendFn = window.overlayApi.sendPlayerAction || window.overlayApi.sendAction;
       if (typeof sendFn === "function") sendFn("like");
@@ -874,6 +877,8 @@ if (btnLike) {
 
 if (btnDislike) {
   btnDislike.addEventListener("click", () => {
+    const isDisliked = btnDislike.classList.toggle("disliked");
+    if (isDisliked && btnLike) btnLike.classList.remove("liked");
     if (window.overlayApi) {
       const sendFn = window.overlayApi.sendPlayerAction || window.overlayApi.sendAction;
       if (typeof sendFn === "function") sendFn("dislike");
@@ -883,13 +888,20 @@ if (btnDislike) {
 
 if (btnVol) {
   btnVol.addEventListener("click", (e) => {
+    e.stopPropagation();
     if (amVolPopup && amVolPopup.contains(e.target)) return;
-    if (window.overlayApi) {
-      const sendFn = window.overlayApi.sendPlayerAction || window.overlayApi.sendAction;
-      if (typeof sendFn === "function") sendFn("toggleMute");
+    if (amVolWrapper) {
+      amVolWrapper.classList.toggle("open");
     }
   });
 }
+
+// Close volume popup on outside click
+document.addEventListener("click", (e) => {
+  if (amVolWrapper && !amVolWrapper.contains(e.target)) {
+    amVolWrapper.classList.remove("open");
+  }
+});
 
 // Window & View Mode Controls
 if (btnLyricsToggle) {

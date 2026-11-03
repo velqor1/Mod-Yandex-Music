@@ -1014,65 +1014,63 @@ function setupIpcHandlers() {
             if (songUrl) {
               const html = await fetchText(songUrl);
               if (html) {
-                const parts = html.split('data-lyrics-container="true"');
-                if (parts.length > 1) {
-                  const blocks = [];
-                  for (let i = 1; i < parts.length; i++) {
-                    const p = parts[i];
-                    const endMarkers = [
-                      p.indexOf('class="RightSidebar'),
-                      p.indexOf('class="LyricsFooter'),
-                      p.indexOf('data-lyrics-container="true"'),
-                      p.indexOf('<form aria-label="Edit Lyrics Form"')
-                    ].filter((idx) => idx !== -1);
-                    const endIdx = endMarkers.length > 0 ? Math.min(...endMarkers) : p.length;
-                    // Strip remainder of opening tag up to '>' to eliminate class="Lyrics__Container..." leaks
-                    const firstGt = p.indexOf(">");
-                    let block = (firstGt !== -1 && firstGt < endIdx) ? p.slice(firstGt + 1, endIdx) : p.slice(0, endIdx);
+                const containerRegex = /<div[^>]*data-lyrics-container="true"[^>]*>/gi;
+                let match;
+                const blocks = [];
+                while ((match = containerRegex.exec(html)) !== null) {
+                  const start = containerRegex.lastIndex;
+                  let depth = 1;
+                  const tagRegex = /<\s*(\/)?\s*([a-zA-Z0-9]+)[^>]*>/g;
+                  tagRegex.lastIndex = start;
+                  let tagMatch;
+                  while (depth > 0 && (tagMatch = tagRegex.exec(html)) !== null) {
+                    const isClosing = Boolean(tagMatch[1]);
+                    const tagName = tagMatch[2].toLowerCase();
+                    if (tagName === "div") {
+                      if (isClosing) depth--;
+                      else depth++;
+                    }
+                    if (depth === 0) {
+                      let block = html.slice(start, tagMatch.index);
+                      block = block.replace(/<div data-exclude-from-selection="true"[\s\S]*?<\/div>/gi, "");
+                      block = block.replace(/<br\s*\/?>/gi, "\n");
+                      block = block.replace(/<\/?(div|p)[^>]*>/gi, "\n");
+                      block = block.replace(/<[^>]+>/g, "");
+                      block = block
+                        .replace(/&amp;/g, "&")
+                        .replace(/&quot;/g, '"')
+                        .replace(/&#39;/g, "'")
+                        .replace(/&#x27;/g, "'")
+                        .replace(/&lt;/g, "<")
+                        .replace(/&gt;/g, ">");
 
-                    // Remove trailing unclosed tags at end of block
-                    block = block.replace(/<div[^>]*$/i, "");
-                    block = block.replace(/<[^>]*$/g, "");
+                      const cleanBlockLines = block
+                        .split("\n")
+                        .map((l) => l.trim())
+                        .filter((l) => {
+                          if (!l) return false;
+                          if (/^<[a-z0-9_-]+/i.test(l)) return false;
+                          if (/^(class|id|data-)\s*=/i.test(l)) return false;
+                          if (l.includes("Lyrics__Container")) return false;
+                          if (/^\d+\s*Contributors/i.test(l)) return false;
+                          if (/^\d*\s*Embed$/i.test(l)) return false;
+                          if (/^\[?You might also like/i.test(l)) return false;
+                          if (/^Translations$/i.test(l) || /^English$/i.test(l)) return false;
+                          if (/Lyrics$/i.test(l) && l.includes("Lyrics")) return false;
+                          return true;
+                        });
 
-                    block = block.replace(/[\s\S]*?<\/h2><\/div><\/div><\/div>/, "");
-                    block = block.replace(/<div data-exclude-from-selection="true"[\s\S]*?<\/div>/g, "");
-                    block = block.replace(/<br\s*\/?>/gi, "\n");
-                    block = block.replace(/<\/div>/gi, "\n");
-                    block = block.replace(/<\/p>/gi, "\n");
-                    block = block.replace(/<[^>]+>/g, "");
-                    block = block.replace(/^\d+\s*Contributors[\s\S]*?(?=\n|\[)/i, "");
-                    block = block.replace(/\d*\s*Embed$/i, "");
-                    block = block
-                      .replace(/&amp;/g, "&")
-                      .replace(/&quot;/g, '"')
-                      .replace(/&#39;/g, "'")
-                      .replace(/&#x27;/g, "'")
-                      .replace(/&lt;/g, "<")
-                      .replace(/&gt;/g, ">");
-
-                    const cleanBlockLines = block
-                      .split("\n")
-                      .map((l) => l.trim())
-                      .filter((l) => {
-                        if (!l) return false;
-                        if (/^<[a-z0-9_-]+/i.test(l)) return false;
-                        if (/^(class|id|data-)\s*=/i.test(l)) return false;
-                        if (l.includes("Lyrics__Container")) return false;
-                        if (/^\d+\s*Contributors/i.test(l)) return false;
-                        if (/^\d*\s*Embed$/i.test(l)) return false;
-                        if (/^\[?You might also like/i.test(l)) return false;
-                        return true;
-                      });
-
-                    if (cleanBlockLines.length > 0) {
-                      blocks.push(cleanBlockLines.join("\n"));
+                      if (cleanBlockLines.length > 0) {
+                        blocks.push(cleanBlockLines.join("\n"));
+                      }
+                      break;
                     }
                   }
+                }
 
-                  const geniusFull = blocks.join("\n").trim();
-                  if (geniusFull) {
-                    return geniusFull;
-                  }
+                const geniusFull = blocks.join("\n").trim();
+                if (geniusFull) {
+                  return geniusFull;
                 }
               }
             }

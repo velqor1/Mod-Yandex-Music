@@ -1843,13 +1843,13 @@
       const isSpeedUp = /speed\s*up|sped\s*up|nightcore|fast/i.test(title);
       const isSlowed = /slowed|reverb/i.test(title);
 
-      let introOffset = isSpeedUp ? 2.5 : 3.8;
-      if (isSlowed) introOffset = 5.5;
-      if (dur < 75) introOffset = Math.min(introOffset, dur * 0.06);
+      let introOffset = isSpeedUp ? 1.8 : 2.4;
+      if (isSlowed) introOffset = 4.2;
+      if (dur < 75) introOffset = Math.min(introOffset, dur * 0.04);
 
-      let outroTail = isSpeedUp ? 3.0 : 4.0;
-      if (isSlowed) outroTail = 6.0;
-      if (dur < 75) outroTail = Math.min(outroTail, dur * 0.05);
+      let outroTail = isSpeedUp ? 2.5 : 3.5;
+      if (isSlowed) outroTail = 5.0;
+      if (dur < 75) outroTail = Math.min(outroTail, dur * 0.04);
 
       const availableTime = Math.max(10, dur - introOffset - outroTail);
       const weights = cleanLines.map((l) => calculateLineWeight(l.text));
@@ -2059,7 +2059,10 @@
     const playBtn = document.getElementById("ym-am-btn-play");
 
     const pos = Math.max(0, Math.floor(position || 0));
-    const dur = Math.max(0, Math.floor(duration || 0));
+    let dur = Math.max(0, Math.floor(duration || 0));
+    if (dur <= 0 && window.__lastPlayerState && window.__lastPlayerState.progress && window.__lastPlayerState.progress.duration > 0) {
+      dur = Math.floor(window.__lastPlayerState.progress.duration);
+    }
     const rem = Math.max(0, dur - pos);
 
     const fmt = (sec) => {
@@ -2407,9 +2410,9 @@
     let activeIdx = -1;
     for (let i = 0; i < currentParsedLyrics.length; i++) {
       const line = currentParsedLyrics[i];
-      if (line.time >= 0 && line.time <= (currentTime + 0.18)) {
+      if (line.time >= 0 && line.time <= (currentTime + 0.35)) {
         activeIdx = i;
-      } else if (line.time > (currentTime + 0.18)) {
+      } else if (line.time > (currentTime + 0.35)) {
         break;
       }
     }
@@ -5987,7 +5990,7 @@
 
       document.querySelector('div[data-test-id="VIBE_BLOCK"]'),
 
-      document.querySelector('div[data-test-id="VIBE_PLAYERBAR"]'),
+      document.querySelector('[data-test-id="VIBE_PLAYERBAR"]'),
 
       document.querySelector('[data-test-id="VIBE_PLAYERBAR_TRACK_NAME"]'),
 
@@ -6058,6 +6061,10 @@
         }
 
         if (sonata.isPlaying !== undefined) isPlaying = !!sonata.isPlaying;
+        if (sonata.isLiked !== undefined) liked = !!sonata.isLiked;
+        if (sonata.isGenerativeLiked !== undefined) liked = !!sonata.isGenerativeLiked;
+        if (sonata.isDisliked !== undefined) disliked = !!sonata.isDisliked;
+        if (sonata.isGenerativeDisliked !== undefined) disliked = !!sonata.isGenerativeDisliked;
 
         break;
 
@@ -6254,38 +6261,14 @@
       if (typeof rawMeta.disliked === "boolean") disliked = rawMeta.disliked;
     }
 
-    const likeBtn = document.querySelector(
-      'button[data-test-id="LIKE_BUTTON"], section[data-test-id="PLAYERBAR_DESKTOP"] button[data-test-id*="LIKE" i], [data-test-id="FULLSCREEN_PLAYER_MODAL"] button[data-test-id*="LIKE" i], button[aria-label*="любим" i], button[aria-label*="нравится" i]'
-    );
-    if (likeBtn) {
-      const ariaLabel = (likeBtn.getAttribute("aria-label") || "").toLowerCase();
-      const isDelete = ariaLabel.includes("удалить") || ariaLabel.includes("из любимых") || ariaLabel.includes("из коллекции");
-      const ariaChecked = likeBtn.getAttribute("aria-checked") === "true" || likeBtn.getAttribute("aria-pressed") === "true";
-      const hasActive = likeBtn.className.includes("likeButton_active") || likeBtn.className.includes("active") || likeBtn.classList.contains("liked");
-      const pathFilled = Array.from(likeBtn.querySelectorAll("path")).some((p) => {
-        const f = p.getAttribute("fill");
-        return f && f !== "none" && f !== "transparent" && f !== "currentColor";
-      });
-      if (isDelete || ariaChecked || hasActive || pathFilled) {
-        liked = true;
-      }
+    const activeLikeBtn = findActivePlayerLikeButton();
+    if (activeLikeBtn && isButtonActive(activeLikeBtn)) {
+      liked = true;
     }
 
-    const dislikeBtn = document.querySelector(
-      'button[data-test-id="DISLIKE_BUTTON"], section[data-test-id="PLAYERBAR_DESKTOP"] button[data-test-id*="DISLIKE" i], [data-test-id="FULLSCREEN_PLAYER_MODAL"] button[data-test-id*="DISLIKE" i], button[aria-label*="не нравится" i], button[aria-label*="дизлайк" i]'
-    );
-    if (dislikeBtn) {
-      const dLabel = (dislikeBtn.getAttribute("aria-label") || "").toLowerCase();
-      const dDelete = dLabel.includes("удалить");
-      const dChecked = dislikeBtn.getAttribute("aria-checked") === "true" || dislikeBtn.getAttribute("aria-pressed") === "true";
-      const dActive = dislikeBtn.className.includes("active") || dislikeBtn.classList.contains("disliked");
-      const dPathFilled = Array.from(dislikeBtn.querySelectorAll("path")).some((p) => {
-        const f = p.getAttribute("fill");
-        return f && f !== "none" && f !== "transparent" && f !== "currentColor";
-      });
-      if (dDelete || dChecked || dActive || dPathFilled) {
-        disliked = true;
-      }
+    const activeDislikeBtn = findActivePlayerDislikeButton();
+    if (activeDislikeBtn && isButtonActive(activeDislikeBtn)) {
+      disliked = true;
     }
 
     // 9. Volume extraction
@@ -6334,6 +6317,76 @@
 
 
 
+  function findActivePlayerLikeButton() {
+    const activePlayerContainers = [
+      document.querySelector('[data-test-id="VIBE_PLAYERBAR"]'),
+      document.querySelector('section[data-test-id="PLAYERBAR_DESKTOP"]'),
+      document.querySelector('[data-test-id="FULLSCREEN_PLAYER_MODAL"]'),
+      document.querySelector('[data-test-id="VIBE_BLOCK"]'),
+      document.querySelector('footer')
+    ].filter(Boolean);
+
+    for (const container of activePlayerContainers) {
+      const btn = container.querySelector(
+        'button[data-test-id="LIKE_BUTTON"], button[data-test-id*="LIKE" i], button[aria-label*="любим" i], button[aria-label*="нравится" i], button[aria-label*="like" i]'
+      );
+      if (btn) return btn;
+    }
+    return document.querySelector(
+      'section[data-test-id="PLAYERBAR_DESKTOP"] button[data-test-id*="LIKE" i], [data-test-id="VIBE_PLAYERBAR"] button[data-test-id*="LIKE" i]'
+    );
+  }
+
+  function findActivePlayerDislikeButton() {
+    const activePlayerContainers = [
+      document.querySelector('[data-test-id="VIBE_PLAYERBAR"]'),
+      document.querySelector('section[data-test-id="PLAYERBAR_DESKTOP"]'),
+      document.querySelector('[data-test-id="FULLSCREEN_PLAYER_MODAL"]'),
+      document.querySelector('[data-test-id="VIBE_BLOCK"]'),
+      document.querySelector('footer')
+    ].filter(Boolean);
+
+    for (const container of activePlayerContainers) {
+      const btn = container.querySelector(
+        'button[data-test-id="DISLIKE_BUTTON"], button[data-test-id*="DISLIKE" i], button[aria-label*="не нравится" i], button[aria-label*="дизлайк" i], button[aria-label*="dislike" i]'
+      );
+      if (btn) return btn;
+    }
+    return document.querySelector(
+      'section[data-test-id="PLAYERBAR_DESKTOP"] button[data-test-id*="DISLIKE" i], [data-test-id="VIBE_PLAYERBAR"] button[data-test-id*="DISLIKE" i]'
+    );
+  }
+
+  function isButtonActive(btn) {
+    if (!btn) return false;
+    const ariaLabel = (btn.getAttribute("aria-label") || "").toLowerCase();
+    const isDelete = ariaLabel.includes("удалить") || ariaLabel.includes("из любимых") || ariaLabel.includes("из коллекции") || ariaLabel.includes("убрать");
+    const ariaChecked = btn.getAttribute("aria-checked") === "true" || btn.getAttribute("aria-pressed") === "true";
+    const hasActiveClass = btn.className.includes("likeButton_active") || btn.className.includes("active") || btn.classList.contains("liked") || btn.classList.contains("disliked");
+    const hasActiveChild = !!btn.querySelector('[class*="active" i], [class*="liked" i], [class*="filled" i]');
+    const pathFilled = Array.from(btn.querySelectorAll("path, svg")).some((el) => {
+      const f = el.getAttribute("fill");
+      return f && f !== "none" && f !== "transparent" && f !== "currentColor";
+    });
+    let fiberActive = false;
+    try {
+      const fiberKey = Object.keys(btn).find((k) => k.startsWith("__reactFiber$") || k.startsWith("__reactInternalInstance$"));
+      if (fiberKey && btn[fiberKey]) {
+        let node = btn[fiberKey];
+        for (let i = 0; i < 5 && node; i++) {
+          const p = node.memoizedProps;
+          if (p && (p.isLiked === true || p.liked === true || p.checked === true || p.active === true || p.isDisliked === true || p.disliked === true)) {
+            fiberActive = true;
+            break;
+          }
+          node = node.return;
+        }
+      }
+    } catch (_) {}
+
+    return isDelete || ariaChecked || hasActiveClass || hasActiveChild || pathFilled || fiberActive;
+  }
+
   function observePlayer() {
 
     // Only one interval runner
@@ -6369,6 +6422,7 @@
             loadLyricsForTrack(state.track.title, state.track.artists, state.track.id, state.track.coverUrl);
           }
 
+          hookDirectAudioElement();
           // Active lyrics line synchronization & Apple Music progress update
           if (fsLyricsVisible && state.progress) {
             if (state.progress.position !== undefined) {
@@ -6473,14 +6527,10 @@
         window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", code: "ArrowLeft", ctrlKey: true, bubbles: true }));
       }
     } else if (action === "like") {
-      const likeBtn = document.querySelector(
-        'button[data-test-id="LIKE_BUTTON"], section[data-test-id="PLAYERBAR_DESKTOP"] button[data-test-id*="LIKE" i], [data-test-id="FULLSCREEN_PLAYER_MODAL"] button[data-test-id*="LIKE" i], button[aria-label*="любим" i], button[aria-label*="нравится" i], button[aria-label*="like" i]'
-      );
+      const likeBtn = findActivePlayerLikeButton();
       if (likeBtn) triggerClick(likeBtn);
     } else if (action === "dislike") {
-      const dislikeBtn = document.querySelector(
-        'button[data-test-id="DISLIKE_BUTTON"], section[data-test-id="PLAYERBAR_DESKTOP"] button[data-test-id*="DISLIKE" i], [data-test-id="FULLSCREEN_PLAYER_MODAL"] button[data-test-id*="DISLIKE" i], button[aria-label*="не нравится" i], button[aria-label*="дизлайк" i]'
-      );
+      const dislikeBtn = findActivePlayerDislikeButton();
       if (dislikeBtn) triggerClick(dislikeBtn);
     } else if (action === "setVolume" && payload && typeof payload.volume === "number") {
       const vol = Math.max(0, Math.min(1, payload.volume));
