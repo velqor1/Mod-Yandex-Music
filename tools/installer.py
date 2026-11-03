@@ -19,7 +19,7 @@ from tkinter import ttk, messagebox, filedialog
 from asar_tool import extract_asar, pack_asar
 
 OFFICIAL_DOWNLOAD_URL = "https://music-desktop-application.s3.yandex.net/stable/Yandex_Music_x64_5.124.1.exe"
-FALLBACK_DOWNLOAD_URL = "https://github.com/bibikovaleksej52-eng/Mod-Yandex-Music/releases/download/v1.1.0/Yandex_Music_x64_5.124.1.exe"
+FALLBACK_DOWNLOAD_URL = "https://github.com/velqor1/Mod-Yandex-Music/releases/download/v1.1.0/Yandex_Music_x64_5.124.1.exe"
 
 def get_base_dir():
     if getattr(sys, 'frozen', False):

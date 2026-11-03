@@ -17,7 +17,7 @@ def get_auth_token():
     return os.environ.get("GITHUB_TOKEN", "")
 
 TOKEN = get_auth_token()
-REPO = "bibikovaleksej52-eng/Mod-Yandex-Music"
+REPO = "velqor1/Mod-Yandex-Music"
 
 def publish(tag, name, body, exe_path):
     if not TOKEN:

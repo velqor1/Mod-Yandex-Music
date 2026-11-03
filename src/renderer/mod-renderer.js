@@ -2479,7 +2479,7 @@
 
   async function checkModUpdates() {
     try {
-      const res = await fetch("https://api.github.com/repos/bibikovaleksej52-eng/Mod-Yandex-Music/releases/latest", {
+      const res = await fetch("https://api.github.com/repos/velqor1/Mod-Yandex-Music/releases/latest", {
         headers: { "Accept": "application/vnd.github.v3+json" }
       });
       if (!res.ok) return;
@@ -2525,7 +2525,7 @@
       // Check currentAccountStatus if present
       if (typeof currentAccountStatus !== "undefined" && currentAccountStatus) {
         const s = JSON.stringify(currentAccountStatus).toLowerCase();
-        if (s.includes("alex.bibikov") || s.includes("бибиков") || s.includes("alexis0eu") || s.includes("bibikovaleksej52-eng")) {
+        if (s.includes("alex.bibikov") || s.includes("бибиков") || s.includes("alexis0eu") || s.includes("velqor1")) {
           localStorage.setItem("ym_mod_is_admin", "true");
           return true;
         }
@@ -2533,7 +2533,7 @@
 
       // Check user profile container or page text for Alex
       const bodyText = (document.body ? document.body.innerText.slice(0, 10000) : "").toLowerCase();
-      if (bodyText.includes("алексей бибиков") || bodyText.includes("alex.bibikov") || bodyText.includes("alexis0eu") || bodyText.includes("bibikovaleksej52-eng") || bodyText.includes("бибиков")) {
+      if (bodyText.includes("алексей бибиков") || bodyText.includes("alex.bibikov") || bodyText.includes("alexis0eu") || bodyText.includes("velqor1") || bodyText.includes("бибиков")) {
         localStorage.setItem("ym_mod_is_admin", "true");
         return true;
       }
@@ -2663,7 +2663,7 @@
       loadAdminProposals();
 
       const bodyText = `${desc}\n\n---\n**Контакт автора:** ${contact || "Не указан"}\n**Версия мода:** v1.3.5`;
-      const issueUrl = `https://github.com/bibikovaleksej52-eng/Mod-Yandex-Music/issues/new?title=${encodeURIComponent("[Идея] " + title)}&body=${encodeURIComponent(bodyText)}&labels=suggestion`;
+      const issueUrl = `https://github.com/velqor1/Mod-Yandex-Music/issues/new?title=${encodeURIComponent("[Идея] " + title)}&body=${encodeURIComponent(bodyText)}&labels=suggestion`;
 
       try {
         if (window.yandexMusicMod && typeof window.yandexMusicMod.openExternal === "function") {
@@ -2690,7 +2690,7 @@
 
     let githubIssues = [];
     try {
-      const res = await fetch("https://api.github.com/repos/bibikovaleksej52-eng/Mod-Yandex-Music/issues?labels=suggestion&state=all&per_page=30");
+      const res = await fetch("https://api.github.com/repos/velqor1/Mod-Yandex-Music/issues?labels=suggestion&state=all&per_page=30");
       if (res.ok) githubIssues = await res.json();
     } catch (e) {}
 

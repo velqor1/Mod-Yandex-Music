@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/bibikovaleksej52-eng/Mod-Yandex-Music/releases/latest">
+  <a href="https://github.com/velqor1/Mod-Yandex-Music/releases/latest">
     <img src="https://img.shields.io/badge/Скачать%20EXE-Установщик%20в%201%20клик-8b5cf6?style=for-the-badge&logo=windows&logoColor=white" alt="Скачать EXE">
   </a>
   <img src="https://img.shields.io/badge/Мод%20Версия-v1.3.13-ff2d3c?style=for-the-badge&logo=github&logoColor=white" alt="Мод v1.3.13">
@@ -21,7 +21,7 @@
 </p>
 
 > [!TIP]
-> **Установка в 1 клик:** просто скачайте готовый установщик [Yandex_Music_x64_5.124.1_Mod.exe](https://github.com/bibikovaleksej52-eng/Mod-Yandex-Music/releases/latest), запустите его — он автоматически установит модифицированный клиент с красивыми ярлыками!
+> **Установка в 1 клик:** просто скачайте готовый установщик [Yandex_Music_x64_5.124.1_Mod.exe](https://github.com/velqor1/Mod-Yandex-Music/releases/latest), запустите его — он автоматически установит модифицированный клиент с красивыми ярлыками!
 
 ---
 
@@ -141,7 +141,7 @@
 ## 💻 Как установить и пользоваться
 
 ### Вариант 1 (Рекомендуемый — через готовый установщик):
-1. **[Скачайте последнюю версию Yandex_Music_x64_5.124.1_Mod.exe](https://github.com/bibikovaleksej52-eng/Mod-Yandex-Music/releases/latest)** из вкладки Releases.
+1. **[Скачайте последнюю версию Yandex_Music_x64_5.124.1_Mod.exe](https://github.com/velqor1/Mod-Yandex-Music/releases/latest)** из вкладки Releases.
 2. Запустите файл `Yandex_Music_x64_5.124.1_Mod.exe`.
 3. Установщик распакует Яндекс Музыку со всеми встроенными модами, создаст ярлыки на рабочем столе и в меню Пуск и сразу запустит плеер!
 
@@ -151,7 +151,7 @@
 Если у вас установлен Python:
 ```powershell
 # Клонировать репозиторий
-git clone https://github.com/bibikovaleksej52-eng/Mod-Yandex-Music.git
+git clone https://github.com/velqor1/Mod-Yandex-Music.git
 cd Mod-Yandex-Music
 
 # Запустить скрипт внедрения мода
