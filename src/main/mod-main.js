@@ -1026,14 +1026,20 @@ function setupIpcHandlers() {
                       p.indexOf('<form aria-label="Edit Lyrics Form"')
                     ].filter((idx) => idx !== -1);
                     const endIdx = endMarkers.length > 0 ? Math.min(...endMarkers) : p.length;
-                    let block = p.slice(0, endIdx);
+                    // Strip remainder of opening tag up to '>' to eliminate class="Lyrics__Container..." leaks
+                    const firstGt = p.indexOf(">");
+                    let block = (firstGt !== -1 && firstGt < endIdx) ? p.slice(firstGt + 1, endIdx) : p.slice(0, endIdx);
+
+                    // Remove trailing unclosed tags at end of block
+                    block = block.replace(/<div[^>]*$/i, "");
+                    block = block.replace(/<[^>]*$/g, "");
 
                     block = block.replace(/[\s\S]*?<\/h2><\/div><\/div><\/div>/, "");
                     block = block.replace(/<div data-exclude-from-selection="true"[\s\S]*?<\/div>/g, "");
                     block = block.replace(/<br\s*\/?>/gi, "\n");
+                    block = block.replace(/<\/div>/gi, "\n");
+                    block = block.replace(/<\/p>/gi, "\n");
                     block = block.replace(/<[^>]+>/g, "");
-                    block = block.replace(/^\d+\s*Contributors[\s\S]*?(?=\n|\[)/i, "");
-                    block = block.replace(/\d*\s*Embed$/i, "");
                     block = block.replace(/^\d+\s*Contributors[\s\S]*?(?=\n|\[)/i, "");
                     block = block.replace(/\d*\s*Embed$/i, "");
                     block = block
@@ -1044,7 +1050,23 @@ function setupIpcHandlers() {
                       .replace(/&lt;/g, "<")
                       .replace(/&gt;/g, ">");
 
-                    if (block.trim()) blocks.push(block.trim());
+                    const cleanBlockLines = block
+                      .split("\n")
+                      .map((l) => l.trim())
+                      .filter((l) => {
+                        if (!l) return false;
+                        if (/^<[a-z0-9_-]+/i.test(l)) return false;
+                        if (/^(class|id|data-)\s*=/i.test(l)) return false;
+                        if (l.includes("Lyrics__Container")) return false;
+                        if (/^\d+\s*Contributors/i.test(l)) return false;
+                        if (/^\d*\s*Embed$/i.test(l)) return false;
+                        if (/^\[?You might also like/i.test(l)) return false;
+                        return true;
+                      });
+
+                    if (cleanBlockLines.length > 0) {
+                      blocks.push(cleanBlockLines.join("\n"));
+                    }
                   }
 
                   const geniusFull = blocks.join("\n").trim();

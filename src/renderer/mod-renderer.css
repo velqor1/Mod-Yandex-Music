@@ -1919,7 +1919,7 @@ button[aria-label*="Текст"] {
   left: 0 !important;
   top: 0 !important;
   bottom: 0 !important;
-  width: 0% !important;
+  width: 0%;
   background: rgba(255, 255, 255, 0.9) !important;
   border-radius: 4px !important;
   pointer-events: none !important;
@@ -1928,13 +1928,13 @@ button[aria-label*="Текст"] {
 .ym-am-trackbar-thumb {
   position: absolute !important;
   top: 50% !important;
-  left: 0% !important;
+  left: 0%;
   width: 10px !important;
   height: 10px !important;
   border-radius: 50% !important;
   background: #ffffff !important;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4) !important;
-  transform: translate(-50%, -50%) scale(0) !important;
+  transform: translate(-50%, -50%) scale(1) !important;
   transition: transform 0.15s ease !important;
   pointer-events: none !important;
 }

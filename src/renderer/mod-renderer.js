@@ -1789,8 +1789,18 @@
 
       timeRegex.lastIndex = 0;
       let match;
-      const text = trimmed.replace(timeRegex, "").trim();
+      let text = trimmed.replace(timeRegex, "").trim();
       timeRegex.lastIndex = 0;
+
+      // Clean HTML tags and ignore leaked containers/attributes
+      text = text.replace(/<[^>]+>/g, "").trim();
+      if (!text) continue;
+      if (/^<[a-z0-9_-]+/i.test(text) || /^<[a-z0-9_-]+/i.test(trimmed)) continue;
+      if (/^(class|id|data-[a-z0-9_-]+)\s*=/i.test(text) || /^(class|id|data-[a-z0-9_-]+)\s*=/i.test(trimmed)) continue;
+      if (text.includes("Lyrics__Container") || trimmed.includes("Lyrics__Container")) continue;
+      if (text.includes("data-lyrics-container") || trimmed.includes("data-lyrics-container")) continue;
+      if (/^<\/?(div|p|span)>/i.test(trimmed) || trimmed === "<div" || trimmed === ">" || trimmed === "<") continue;
+
       let foundTime = false;
       while ((match = timeRegex.exec(trimmed)) !== null) {
         hasAnyTime = true;
@@ -1819,6 +1829,8 @@
       const lower = txt.toLowerCase();
       if (lower.startsWith("[текст песни") || lower.startsWith("[lyrics of")) return false;
       if (lower.includes("contributors") || lower.includes("translations") || lower.includes("romanization") || lower.includes("you might also like")) return false;
+      if (lower.includes("lyrics__container") || lower.includes("data-lyrics-container")) return false;
+      if (/^<[a-z0-9_-]+/i.test(txt) || /^(class|id|data-)\s*=/i.test(txt)) return false;
       if (txt === "♫ текст этой песни недоступен." || txt === "текст этой песни недоступен.") return false;
       if (isSectionHeader(txt)) return false;
       return true;
@@ -2060,8 +2072,12 @@
     if (remEl) remEl.textContent = `-${fmt(rem)}`;
 
     const pct = dur > 0 ? Math.min(100, Math.max(0, (position / dur) * 100)) : 0;
-    if (fillEl) fillEl.style.width = `${pct}%`;
-    if (thumbEl) thumbEl.style.left = `${pct}%`;
+    if (fillEl) {
+      fillEl.style.setProperty("width", `${pct}%`, "important");
+    }
+    if (thumbEl) {
+      thumbEl.style.setProperty("left", `${pct}%`, "important");
+    }
 
     if (playBtn) {
       playBtn.innerHTML = isPlaying
@@ -6230,17 +6246,61 @@
 
 
 
-    // 8. Like status
-
-    const likeBtn = document.querySelector('button[data-test-id="LIKE_BUTTON"], [data-test-id="PLAYERBAR_DESKTOP"] button[data-test-id*="LIKE"], [data-test-id="FULLSCREEN_PLAYER_MODAL"] button[data-test-id*="LIKE"], button[aria-label*="Нравится"], button[aria-label*="like" i]');
-    if (likeBtn) {
-      liked = likeBtn.className.includes("likeButton_active") ||
-              likeBtn.classList.contains("liked") ||
-              likeBtn.getAttribute("aria-checked") === "true" ||
-              likeBtn.getAttribute("data-is-liked") === "true";
+    // 8. Like and Dislike status
+    let disliked = false;
+    if (rawMeta) {
+      if (typeof rawMeta.liked === "boolean") liked = rawMeta.liked;
+      if (typeof rawMeta.isLiked === "boolean") liked = rawMeta.isLiked;
+      if (typeof rawMeta.disliked === "boolean") disliked = rawMeta.disliked;
     }
 
+    const likeBtn = document.querySelector(
+      'button[data-test-id="LIKE_BUTTON"], section[data-test-id="PLAYERBAR_DESKTOP"] button[data-test-id*="LIKE" i], [data-test-id="FULLSCREEN_PLAYER_MODAL"] button[data-test-id*="LIKE" i], button[aria-label*="любим" i], button[aria-label*="нравится" i]'
+    );
+    if (likeBtn) {
+      const ariaLabel = (likeBtn.getAttribute("aria-label") || "").toLowerCase();
+      const isDelete = ariaLabel.includes("удалить") || ariaLabel.includes("из любимых") || ariaLabel.includes("из коллекции");
+      const ariaChecked = likeBtn.getAttribute("aria-checked") === "true" || likeBtn.getAttribute("aria-pressed") === "true";
+      const hasActive = likeBtn.className.includes("likeButton_active") || likeBtn.className.includes("active") || likeBtn.classList.contains("liked");
+      const pathFilled = Array.from(likeBtn.querySelectorAll("path")).some((p) => {
+        const f = p.getAttribute("fill");
+        return f && f !== "none" && f !== "transparent" && f !== "currentColor";
+      });
+      if (isDelete || ariaChecked || hasActive || pathFilled) {
+        liked = true;
+      }
+    }
 
+    const dislikeBtn = document.querySelector(
+      'button[data-test-id="DISLIKE_BUTTON"], section[data-test-id="PLAYERBAR_DESKTOP"] button[data-test-id*="DISLIKE" i], [data-test-id="FULLSCREEN_PLAYER_MODAL"] button[data-test-id*="DISLIKE" i], button[aria-label*="не нравится" i], button[aria-label*="дизлайк" i]'
+    );
+    if (dislikeBtn) {
+      const dLabel = (dislikeBtn.getAttribute("aria-label") || "").toLowerCase();
+      const dDelete = dLabel.includes("удалить");
+      const dChecked = dislikeBtn.getAttribute("aria-checked") === "true" || dislikeBtn.getAttribute("aria-pressed") === "true";
+      const dActive = dislikeBtn.className.includes("active") || dislikeBtn.classList.contains("disliked");
+      const dPathFilled = Array.from(dislikeBtn.querySelectorAll("path")).some((p) => {
+        const f = p.getAttribute("fill");
+        return f && f !== "none" && f !== "transparent" && f !== "currentColor";
+      });
+      if (dDelete || dChecked || dActive || dPathFilled) {
+        disliked = true;
+      }
+    }
+
+    // 9. Volume extraction
+    let volume = 1.0;
+    let muted = false;
+    if (activeAudio) {
+      if (typeof activeAudio.volume === "number") volume = activeAudio.volume;
+      muted = !!activeAudio.muted;
+    } else {
+      const anyAudio = document.querySelector("audio");
+      if (anyAudio) {
+        if (typeof anyAudio.volume === "number") volume = anyAudio.volume;
+        muted = !!anyAudio.muted;
+      }
+    }
 
     if (!title && window.__lastPlayerState && window.__lastPlayerState.track && window.__lastPlayerState.track.title) {
       title = window.__lastPlayerState.track.title;
@@ -6250,33 +6310,24 @@
     }
 
     return {
-
       isPlaying,
-
       track: {
-
         id: trackId,
-
         title,
-
         artists,
-
         coverUrl,
-
         liked,
-
+        disliked,
         rawMeta,
-
       },
-
       progress: {
-
         position,
-
         duration,
-
       },
-
+      volume: {
+        volume,
+        muted,
+      },
     };
 
   }
@@ -6423,9 +6474,31 @@
       }
     } else if (action === "like") {
       const likeBtn = document.querySelector(
-        'section[data-test-id="PLAYERBAR_DESKTOP"] button[data-test-id*="LIKE" i], button[data-test-id="LIKE_BUTTON"], [data-test-id="FULLSCREEN_PLAYER_MODAL"] button[data-test-id*="LIKE" i], button[aria-label*="Нравится"], button[aria-label*="like" i]'
+        'button[data-test-id="LIKE_BUTTON"], section[data-test-id="PLAYERBAR_DESKTOP"] button[data-test-id*="LIKE" i], [data-test-id="FULLSCREEN_PLAYER_MODAL"] button[data-test-id*="LIKE" i], button[aria-label*="любим" i], button[aria-label*="нравится" i], button[aria-label*="like" i]'
       );
       if (likeBtn) triggerClick(likeBtn);
+    } else if (action === "dislike") {
+      const dislikeBtn = document.querySelector(
+        'button[data-test-id="DISLIKE_BUTTON"], section[data-test-id="PLAYERBAR_DESKTOP"] button[data-test-id*="DISLIKE" i], [data-test-id="FULLSCREEN_PLAYER_MODAL"] button[data-test-id*="DISLIKE" i], button[aria-label*="не нравится" i], button[aria-label*="дизлайк" i]'
+      );
+      if (dislikeBtn) triggerClick(dislikeBtn);
+    } else if (action === "setVolume" && payload && typeof payload.volume === "number") {
+      const vol = Math.max(0, Math.min(1, payload.volume));
+      const audios = document.querySelectorAll("audio");
+      audios.forEach((a) => {
+        try {
+          a.volume = vol;
+          if (vol > 0 && a.muted) a.muted = false;
+        } catch (e) {}
+      });
+      const volInput = document.querySelector('input[type="range"][data-test-id*="VOLUME" i], section[data-test-id="PLAYERBAR_DESKTOP"] input[type="range"], [data-test-id="VOLUME_SLIDER"] input');
+      if (volInput) {
+        try {
+          volInput.value = String(vol * 100);
+          volInput.dispatchEvent(new Event("input", { bubbles: true }));
+          volInput.dispatchEvent(new Event("change", { bubbles: true }));
+        } catch (e) {}
+      }
     } else if (action === "toggleMute") {
       const volBtn = document.querySelector('button[data-test-id*="VOLUME"], [data-test-id="VOLUME_BUTTON"]');
       if (volBtn) {
