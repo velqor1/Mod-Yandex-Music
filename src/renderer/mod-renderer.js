@@ -1,3 +1,71 @@
+const BUILTIN_SYNCED_LYRICS = {
+  "чувство собственной важности": `[00:00.60]Делаем бабки, но не сегодня
+[00:03.70]На мне большие тряпки, это значит, что я в форме
+[00:06.80]В твоём рэпе нет правды, и ты это помнишь
+[00:09.90]Но на деньги от мамки он делает себе промо (Промо)
+[00:13.00]Звонит мама (Мама) и такая, типо: «Как дела?» (Алё)
+[00:16.10]Вру, что всё нормально, правда слёзы на глазах
+[00:19.20]Наверно, я мог бы умереть ещё тогда
+[00:22.30]Мгновенно, стал бы выше, чем облака
+[00:25.40]Новые взгляды ща на мне, от этого не по себе
+[00:28.50]Хотя об этом я мечтал (У-у-у, е-ха)
+[00:31.60]И я считаю все купюры (Фью), но не сказать, что счастлив
+[00:34.70]Почерк навсегда в культуре, сорок три, блять, труппа в туре (Сюда)
+[00:37.80]Помню, ты клялась, что навсегда
+[00:40.90]Но теперь плачешь под мой трек, когда дома одна (Ты одна)
+[00:44.00]Я больше не поверю ей, да, ей, на венах вижу раны
+[00:47.10]Ну, давай, проверь, почему у меня шрамы
+[00:50.20]Я не езжу в метро
+[00:53.30]Чувство собственной важности щас во мне проросло
+[00:56.40]Но так давно уже не чувствую тепло
+[01:02.60]Делаем бабки, но не сегодня
+[01:05.70]На мне большие тряпки, это значит, что я в форме
+[01:08.80]В твоём рэпе нет правды, и ты это помнишь
+[01:11.90]Но на деньги от мамки он делает себе промо (Промо)
+[01:15.00]Ну, давай, проверь, ну, давай, проверь
+[01:18.10]Почему у меня шрамы
+[01:21.20]Ну, давай, проверь
+[01:24.30]Почему у меня— (О-о, а)`,
+
+  "универ": `[00:02.50]У-у-у
+[00:05.70]У-у-у
+[00:08.90]У-у
+[00:12.10]У-у-у-у-у
+[00:15.30]У-у-у-у-у (Ей-ей-ей, я)
+[00:18.50]У-у-у-у-у
+[00:20.50]Я не знаю твоё имя, но ты в моей голове
+[00:23.70]Я-я-я хожу по универу: они смотрят на мой свэг
+[00:26.90]Ваши-Ваши правила ничто, и я курю на этаже (Я, я)
+[00:30.10]Мне плевать (Мне пох) на твоё мнение — я теперь живу в Москве (А-а)
+[00:33.30]Я не знаю твоё имя, но ты в моей голове (А-а)
+[00:36.50]Я-Я хожу по универу: они смотрят на мой свэг (Е-ей)
+[00:39.70]Ваши правила ничто, и я курю на этаже (Я)
+[00:42.90]Мне плевать (Мне —) на твоё мнение — я теперь живу в Москве (Мяу, мне пох!)
+[00:46.10]Покидаю свой город, он родной, 1-6-4, ай
+[00:49.30]Вариантов так много — беру всё, ты можешь и не взять
+[00:52.50]Ты злишься много, посмотри, ты уже синий
+[00:55.70]Ведь я крутая, но обвинения слиты
+[00:58.90]Люблю финики, нахожусь в клинике
+[01:02.10]Тебя тянет ко мне так, что противоречит законам физики
+[01:05.30]Я на сцене — упали критики
+[01:08.50]И все кадры уже на ширике
+[01:11.70]Как вести себя на интервью, ведь я как Билли Миллиган?
+[01:14.90]Да-да-да, это легко — брать всех за дураков
+[01:18.10]Как твоё имя? Скажи — я запомню
+[01:21.30]Ладно, молчи, я же над тобой рофлю-ю-ю-ю
+[01:24.50]У-у, у, у (О, о)
+[01:27.70]У-у, у, у-у
+[01:30.90]У-у, у, у-у
+[01:34.10]Я не знаю твоё имя, но ты в моей голове
+[01:37.30]Я-я-я хожу по универу: они смотрят на мой свэг
+[01:40.50]Ваши-Ваши правила ничто, и я курю на этаже (Мне пох!)
+[01:43.70]Мне плевать на твоё мнение — я теперь живу в Москве (А-а)
+[01:46.90]Я не знаю твоё имя, но ты в моей голове (А-а)
+[01:50.10]Я-Я хожу по универу: они смотрят на мой свэг (Е-ей)
+[01:53.30]Ваши правила ничто, и я курю на этаже (Я)
+[01:56.50]Мне плевать (Мне —) на твоё мнение — я теперь живу в Москве (Мне пох!)`
+};
+
 (function () {
 
 // ==========================================
@@ -1871,6 +1939,28 @@
   }
 
   async function loadLyricsForTrack(title, artist, trackId, coverUrl, album = "") {
+    const cleanTitleLower = (title || "").trim().toLowerCase();
+    if (BUILTIN_SYNCED_LYRICS[cleanTitleLower]) {
+      currentTrackTitle = (title || "").trim();
+      currentTrackArtist = (typeof artist === "string" ? artist : "").trim();
+      currentTrackAlbum = album || "";
+      currentTrackCover = coverUrl || "";
+      currentTrackLyricsId = trackId || `${currentTrackTitle}-${currentTrackArtist}`;
+      isFetchingLyrics = false;
+      currentParsedLyrics = parseLrcToLines(BUILTIN_SYNCED_LYRICS[cleanTitleLower]);
+      renderLyricsBodyUI();
+      if (window.yandexMusicMod && window.yandexMusicMod.updateLyrics) {
+        window.yandexMusicMod.updateLyrics({
+          track: currentTrackTitle,
+          artist: currentTrackArtist,
+          trackId: trackId,
+          coverUrl: currentTrackCover,
+          lrc: BUILTIN_SYNCED_LYRICS[cleanTitleLower],
+          lines: currentParsedLyrics,
+        });
+      }
+      return;
+    }
     const cleanTitle = (title || "").trim();
     let cleanArtist = "";
     if (Array.isArray(artist)) {
@@ -1901,6 +1991,7 @@
 
     isFetchingLyrics = true;
     let lrc = null;
+    let plainYmFallback = null;
 
     try {
       let oauthToken = "";
@@ -1936,16 +2027,19 @@
                 });
                 lrc = lrcLines.join("\n");
               } else if (res.lyrics.fullLyrics) {
-                lrc = res.lyrics.fullLyrics;
+                plainYmFallback = res.lyrics.fullLyrics;
               }
             }
           }
         } catch (e) {}
       }
 
-      // 2. Fallback to main process fetchLyrics
+      // 2. Fallback to main process fetchLyrics (checks LRCLib, built-in, and Genius)
       if (!lrc && window.yandexMusicMod && window.yandexMusicMod.fetchLyrics) {
         lrc = await window.yandexMusicMod.fetchLyrics(cleanTitle, cleanArtist, trackId, oauthToken);
+      }
+      if (!lrc && plainYmFallback) {
+        lrc = plainYmFallback;
       }
     } catch (e) {
       console.error("[Mod] Lyrics fetch error:", e);
@@ -2374,6 +2468,9 @@
   function seekAudioTo(targetSeconds) {
     try {
       const audio = getActiveAudioElement();
+      if (audio && typeof window.__ymCurrentVolume === "number" && Math.abs(audio.volume - window.__ymCurrentVolume) > 0.01) {
+        audio.volume = window.__ymCurrentVolume;
+      }
       if (audio) {
         audio.currentTime = targetSeconds;
       }
@@ -6271,18 +6368,47 @@
       disliked = true;
     }
 
-    // 9. Volume extraction
+    // 9. Volume extraction (Yandex Music uses Sonata / React Fiber, not audio.volume)
     let volume = 1.0;
     let muted = false;
-    if (activeAudio) {
-      if (typeof activeAudio.volume === "number") volume = activeAudio.volume;
-      muted = !!activeAudio.muted;
-    } else {
-      const anyAudio = document.querySelector("audio");
-      if (anyAudio) {
-        if (typeof anyAudio.volume === "number") volume = anyAudio.volume;
-        muted = !!anyAudio.muted;
+
+    // A. Read from CHANGE_VOLUME_SLIDER React Fiber
+    const sliderEl = document.querySelector('[data-test-id="CHANGE_VOLUME_SLIDER"]');
+    if (sliderEl) {
+      const sp = searchFiberProperty(sliderEl, "value");
+      if (sp && typeof sp.value === "number") {
+        volume = sp.value;
+        window.__ymCurrentVolume = volume;
       }
+    }
+
+    // B. Read from CHANGE_VOLUME_BUTTON or sonataVolume
+    if (volume === 1.0) {
+      const volBtn = document.querySelector('[data-test-id="CHANGE_VOLUME_BUTTON"]');
+      if (volBtn) {
+        const bp = searchFiberProperty(volBtn, "sonataVolume");
+        if (bp && typeof bp.sonataVolume === "number") {
+          volume = bp.sonataVolume;
+          window.__ymCurrentVolume = volume;
+        }
+      }
+    }
+
+    // C. Read from persistent mod volume
+    if (typeof window.__ymCurrentVolume === "number") {
+      volume = window.__ymCurrentVolume;
+    } else {
+      try {
+        const savedV = localStorage.getItem("ym_mod_volume");
+        if (savedV !== null) {
+          volume = parseFloat(savedV);
+          window.__ymCurrentVolume = volume;
+        }
+      } catch (e) {}
+    }
+
+    if (activeAudio) {
+      muted = !!activeAudio.muted;
     }
 
     if (!title && window.__lastPlayerState && window.__lastPlayerState.track && window.__lastPlayerState.track.title) {
@@ -6534,6 +6660,12 @@
       if (dislikeBtn) triggerClick(dislikeBtn);
     } else if (action === "setVolume" && payload && typeof payload.volume === "number") {
       const vol = Math.max(0, Math.min(1, payload.volume));
+      window.__ymCurrentVolume = vol;
+      try {
+        localStorage.setItem("ym_mod_volume", String(vol));
+      } catch (e) {}
+
+      // 1. Update HTML5 audio elements
       const audios = document.querySelectorAll("audio");
       audios.forEach((a) => {
         try {
@@ -6541,12 +6673,26 @@
           if (vol > 0 && a.muted) a.muted = false;
         } catch (e) {}
       });
-      const volInput = document.querySelector('input[type="range"][data-test-id*="VOLUME" i], section[data-test-id="PLAYERBAR_DESKTOP"] input[type="range"], [data-test-id="VOLUME_SLIDER"] input');
-      if (volInput) {
+
+      // 2. Call React Fiber onChange on CHANGE_VOLUME_SLIDER
+      const sliderEl = document.querySelector('[data-test-id="CHANGE_VOLUME_SLIDER"]');
+      if (sliderEl) {
         try {
-          volInput.value = String(vol * 100);
-          volInput.dispatchEvent(new Event("input", { bubbles: true }));
-          volInput.dispatchEvent(new Event("change", { bubbles: true }));
+          const sp = searchFiberProperty(sliderEl, "onChange");
+          if (sp && typeof sp.onChange === "function") {
+            sp.onChange(vol);
+          }
+        } catch (e) {}
+      }
+
+      // 3. Call React Fiber onVolumeSet on CHANGE_VOLUME_BUTTON
+      const volBtn = document.querySelector('[data-test-id="CHANGE_VOLUME_BUTTON"]');
+      if (volBtn) {
+        try {
+          const bp = searchFiberProperty(volBtn, "onVolumeSet") || searchFiberProperty(volBtn, "sonataVolume");
+          if (bp && typeof bp.onVolumeSet === "function") {
+            bp.onVolumeSet(vol);
+          }
         } catch (e) {}
       }
     } else if (action === "toggleMute") {

@@ -76,6 +76,10 @@ const btnLyricsToggle = isBrowser ? document.getElementById("btn-lyrics-toggle")
 const btnKaraoke = isBrowser ? document.getElementById("btn-karaoke") : null;
 
 let currentVolume = 1.0;
+try {
+  const savedV = localStorage.getItem("ym_overlay_volume");
+  if (savedV !== null) currentVolume = Math.max(0, Math.min(1, parseFloat(savedV)));
+} catch (e) {}
 let isMuted = false;
 let isDraggingVol = false;
 
@@ -695,8 +699,12 @@ function updateUI(state) {
   }
 
   // Volume Sync
-  if (state.volume) {
-    const v = typeof state.volume.volume === "number" ? state.volume.volume : 1.0;
+  if (state.volume && !isDraggingVol) {
+    let v = typeof state.volume.volume === "number" ? state.volume.volume : currentVolume;
+    // If backend sent 1.0 but overlay has user-set custom volume, honor user volume
+    if (v >= 0.999 && currentVolume < 0.95 && !state.volume.muted) {
+      v = currentVolume;
+    }
     const m = !!state.volume.muted;
     renderVolumeUI(v, m);
   }
@@ -818,6 +826,9 @@ function renderVolumeUI(vol, muted) {
 
 function setVolumeAction(newVol) {
   const clamped = Math.max(0, Math.min(1, Math.round(newVol * 100) / 100));
+  try {
+    localStorage.setItem("ym_overlay_volume", String(clamped));
+  } catch (e) {}
   renderVolumeUI(clamped, false);
   if (window.overlayApi) {
     const sendFn = window.overlayApi.sendPlayerAction || window.overlayApi.sendAction;
@@ -998,6 +1009,9 @@ if (typeof window !== "undefined" && window.overlayApi) {
     }).catch(() => {});
   }
 }
+
+// Render initial volume on load
+renderVolumeUI(currentVolume, false);
 
 // Initial mode setup: start in clean compact mode (~160px)
 
