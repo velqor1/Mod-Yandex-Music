@@ -1,3 +1,4 @@
+function modLog(...args) { try { console.log("[Mod Main]", ...args); } catch(e){} }
 const http = require("http");
 const BUILTIN_SYNCED_LYRICS = {
   "чувство собственной важности": `[00:00.60]Делаем бабки, но не сегодня
@@ -1290,9 +1291,6 @@ function setupIpcHandlers() {
     return mediaServerPort;
   });
 
-  ipcMain.on("yandexMusicMod.getMediaServerPortSync", (event) => {
-    event.returnValue = mediaServerPort;
-  });
 
   ipcMain.handle("yandexMusicMod.getMediaUrl", (_ev, filePath) => {
     if (!filePath) return "";

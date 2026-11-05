@@ -3701,13 +3701,6 @@ const BUILTIN_SYNCED_LYRICS = {
   let liveWallpaperAnimFrame = null;
 
   let cachedMediaServerPort = 0;
-  try {
-    if (window.yandexMusicMod && window.yandexMusicMod.getMediaServerPortSync) {
-      cachedMediaServerPort = window.yandexMusicMod.getMediaServerPortSync() || 0;
-      window.__ymMediaServerPort = cachedMediaServerPort;
-    }
-  } catch (e) {}
-
   if (window.yandexMusicMod && window.yandexMusicMod.getMediaServerPort) {
     window.yandexMusicMod.getMediaServerPort().then((p) => {
       cachedMediaServerPort = p;
@@ -3716,6 +3709,8 @@ const BUILTIN_SYNCED_LYRICS = {
         applyLiveWallpaperSettings();
       }
       renderWallpaperGrid();
+    }).catch((err) => {
+      console.warn("[YandexMusicMod] Error getting media server port:", err);
     });
   }
 
@@ -6848,56 +6843,39 @@ const BUILTIN_SYNCED_LYRICS = {
   // ==========================================
 
   function openModSettings() {
-
-    const backdrop = document.getElementById("ym-mod-modal-backdrop");
-
+    let backdrop = document.getElementById("ym-mod-modal-backdrop");
+    if (!backdrop) {
+      try { injectModUI(); } catch (e) {}
+      backdrop = document.getElementById("ym-mod-modal-backdrop");
+    }
     if (backdrop) {
-
       backdrop.classList.add("open");
       const optWpEnable = document.getElementById("opt-wallpaper-enable");
       if (optWpEnable) optWpEnable.checked = !!modSettings["wallpaper/enabled"];
-
     }
-
   }
-
-
 
   function closeModSettings() {
-
     const backdrop = document.getElementById("ym-mod-modal-backdrop");
-
     if (backdrop) {
-
       backdrop.classList.remove("open");
-
     }
-
   }
-
-
 
   function toggleModSettings() {
-
-    const backdrop = document.getElementById("ym-mod-modal-backdrop");
-
-    if (backdrop) {
-
-      if (backdrop.classList.contains("open")) {
-
-        closeModSettings();
-
-      } else {
-
-        openModSettings();
-
-      }
-
+    let backdrop = document.getElementById("ym-mod-modal-backdrop");
+    if (!backdrop) {
+      try { injectModUI(); } catch (e) {}
+      backdrop = document.getElementById("ym-mod-modal-backdrop");
     }
-
+    if (backdrop) {
+      if (backdrop.classList.contains("open")) {
+        closeModSettings();
+      } else {
+        openModSettings();
+      }
+    }
   }
-
-
 
   function injectFloatingBadge() {
 
