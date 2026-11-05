@@ -86,7 +86,7 @@ const DEFAULT_SETTINGS = {
   "settings/accountExperimentsOverride": [],
 
   // Live Wallpaper & Workshop
-  "wallpaper/enabled": false,
+  "wallpaper/enabled": true,
   "wallpaper/source": "synthwave", // "cyberpunk" | "lofi" | "synthwave" | "nebula" | "matrix" | "waves" | "hyperspace" | "custom"
   "wallpaper/type": "video", // "video" | "canvas" | "image"
   "wallpaper/url": "",

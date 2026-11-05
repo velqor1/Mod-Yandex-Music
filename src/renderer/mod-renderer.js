@@ -3701,6 +3701,13 @@ const BUILTIN_SYNCED_LYRICS = {
   let liveWallpaperAnimFrame = null;
 
   let cachedMediaServerPort = 0;
+  try {
+    if (window.yandexMusicMod && window.yandexMusicMod.getMediaServerPortSync) {
+      cachedMediaServerPort = window.yandexMusicMod.getMediaServerPortSync() || 0;
+      window.__ymMediaServerPort = cachedMediaServerPort;
+    }
+  } catch (e) {}
+
   if (window.yandexMusicMod && window.yandexMusicMod.getMediaServerPort) {
     window.yandexMusicMod.getMediaServerPort().then((p) => {
       cachedMediaServerPort = p;
@@ -3731,12 +3738,16 @@ const BUILTIN_SYNCED_LYRICS = {
     const container = document.createElement("div");
     container.id = "ym-live-wallpaper-container";
     container.innerHTML = `
-      <video id="ym-live-wallpaper-video" loop muted playsinline style="display:none;"></video>
+      <video id="ym-live-wallpaper-video" loop muted playsinline autoplay style="display:none;"></video>
       <canvas id="ym-live-wallpaper-canvas" style="display:none;"></canvas>
       <img id="ym-live-wallpaper-image" style="display:none;" />
       <div id="ym-live-wallpaper-overlay"></div>
     `;
-    document.body.appendChild(container);
+    if (document.body.firstChild) {
+      document.body.insertBefore(container, document.body.firstChild);
+    } else {
+      document.body.appendChild(container);
+    }
 
     // Download listeners from VSThemes window
     if (window.yandexMusicMod && window.yandexMusicMod.onWallpaperDownloadStarted) {
@@ -3829,14 +3840,22 @@ const BUILTIN_SYNCED_LYRICS = {
     const isEnabled = !!modSettings["wallpaper/enabled"];
     const opacity = modSettings["wallpaper/opacity"] !== undefined ? modSettings["wallpaper/opacity"] : 55;
     const blur = modSettings["wallpaper/blur"] !== undefined ? modSettings["wallpaper/blur"] : 0;
-    const source = modSettings["wallpaper/source"] || "synthwave";
-    const type = modSettings["wallpaper/type"] || "video";
-    const customUrl = modSettings["wallpaper/url"] || "";
+    const activeUrl = modSettings["wallpaper/url"] || modSettings["wallpaper/source"] || "";
+    let activeType = modSettings["wallpaper/type"] || "video";
+
+    if (activeUrl.startsWith("canvas:")) {
+      activeType = "canvas";
+    } else if (/\.(gif|png|jpe?g|webp)($|\?)/i.test(activeUrl)) {
+      activeType = "image";
+    } else if (/\.(mp4|webm|m4v)($|\?)/i.test(activeUrl) || !activeType) {
+      activeType = "video";
+    }
 
     container.style.setProperty("--ym-wallpaper-opacity", (opacity / 100).toFixed(2));
     container.style.setProperty("--ym-wallpaper-blur", `${blur}px`);
 
-    if (!isEnabled) {
+    if (!isEnabled || !activeUrl) {
+      document.documentElement.classList.remove("ym-has-live-wallpaper");
       document.body.classList.remove("ym-has-live-wallpaper");
       stopCanvasWallpaper();
       const vid = document.getElementById("ym-live-wallpaper-video");
@@ -3852,23 +3871,12 @@ const BUILTIN_SYNCED_LYRICS = {
       return;
     }
 
+    document.documentElement.classList.add("ym-has-live-wallpaper");
     document.body.classList.add("ym-has-live-wallpaper");
 
     const vid = document.getElementById("ym-live-wallpaper-video");
     const img = document.getElementById("ym-live-wallpaper-image");
     const cvs = document.getElementById("ym-live-wallpaper-canvas");
-
-    // Resolve URL / Source
-    let activeType = type;
-    let activeUrl = customUrl;
-
-    if (source !== "custom") {
-      const preset = WALLPAPER_PRESETS.find(p => p.id === source);
-      if (preset) {
-        activeType = preset.type;
-        activeUrl = preset.url;
-      }
-    }
 
     if (activeType === "canvas") {
       if (vid) { vid.pause(); vid.style.display = "none"; }
@@ -3884,7 +3892,8 @@ const BUILTIN_SYNCED_LYRICS = {
       if (cvs) cvs.style.display = "none";
       if (img) {
         img.style.display = "block";
-        const imgUrl = toMediaUrl(activeUrl); if (img.src !== imgUrl) img.src = imgUrl;
+        const imgUrl = toMediaUrl(activeUrl);
+        if (img.src !== imgUrl) img.src = imgUrl;
       }
     } else {
       // Video
@@ -3892,31 +3901,25 @@ const BUILTIN_SYNCED_LYRICS = {
       if (cvs) cvs.style.display = "none";
       if (img) img.style.display = "none";
       if (vid) {
-        if (!activeUrl) {
-          vid.pause();
-          vid.style.display = "none";
-          if (cvs) {
-            cvs.style.display = "block";
-            startCanvasWallpaper(cvs, "starfield");
-          }
-          return;
-        }
         vid.style.display = "block";
-        vid.onerror = () => {
-          console.warn("[Wallpaper Video] Error loading video, falling back to starfield canvas:", vid.src);
-          vid.style.display = "none";
-          if (cvs) {
-            cvs.style.display = "block";
-            startCanvasWallpaper(cvs, "starfield");
-          }
-        };
-        let streamUrl = toMediaUrl(activeUrl);
+        vid.muted = true;
+        vid.defaultMuted = true;
+        vid.autoplay = true;
+        vid.loop = true;
+        vid.playsInline = true;
+
+        const streamUrl = toMediaUrl(activeUrl);
         if (vid.src !== streamUrl) {
           vid.src = streamUrl;
           vid.load();
         }
         vid.play().catch((err) => {
           console.warn("[Wallpaper Video] Play error:", err);
+          const retryPlay = () => {
+            vid.play().catch(() => {});
+            window.removeEventListener("click", retryPlay);
+          };
+          window.addEventListener("click", retryPlay, { once: true });
         });
       }
     }
@@ -6851,6 +6854,8 @@ const BUILTIN_SYNCED_LYRICS = {
     if (backdrop) {
 
       backdrop.classList.add("open");
+      const optWpEnable = document.getElementById("opt-wallpaper-enable");
+      if (optWpEnable) optWpEnable.checked = !!modSettings["wallpaper/enabled"];
 
     }
 

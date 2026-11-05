@@ -1290,6 +1290,10 @@ function setupIpcHandlers() {
     return mediaServerPort;
   });
 
+  ipcMain.on("yandexMusicMod.getMediaServerPortSync", (event) => {
+    event.returnValue = mediaServerPort;
+  });
+
   ipcMain.handle("yandexMusicMod.getMediaUrl", (_ev, filePath) => {
     if (!filePath) return "";
     if (filePath.startsWith("http://") || filePath.startsWith("https://") || filePath.startsWith("data:") || filePath.startsWith("blob:")) {

@@ -2065,17 +2065,17 @@ button[data-test-id*="appUpdate"],
 
 #ym-live-wallpaper-container {
   position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
+  inset: 0 !important;
   width: 100vw !important;
   height: 100vh !important;
   z-index: 0 !important;
   overflow: hidden !important;
   pointer-events: none !important;
   opacity: 0;
-  transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 0.4s ease;
 }
 
+html.ym-has-live-wallpaper #ym-live-wallpaper-container,
 body.ym-has-live-wallpaper #ym-live-wallpaper-container {
   opacity: 1 !important;
 }
@@ -2084,14 +2084,12 @@ body.ym-has-live-wallpaper #ym-live-wallpaper-container {
 #ym-live-wallpaper-canvas,
 #ym-live-wallpaper-image {
   position: absolute !important;
-  top: 50% !important;
-  left: 50% !important;
-  min-width: 100% !important;
-  min-height: 100% !important;
-  width: auto !important;
-  height: auto !important;
-  transform: translate(-50%, -50%) !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
   object-fit: cover !important;
+  object-position: center center !important;
 }
 
 #ym-live-wallpaper-overlay {
@@ -2105,11 +2103,19 @@ body.ym-has-live-wallpaper #ym-live-wallpaper-container {
 }
 
 /* Glass Transparency when Live Wallpaper is Active */
+html.ym-has-live-wallpaper,
 body.ym-has-live-wallpaper {
   background: transparent !important;
+  background-color: transparent !important;
 }
 
-body.ym-has-live-wallpaper #root,
+body.ym-has-live-wallpaper #root {
+  position: relative !important;
+  z-index: 1 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
 body.ym-has-live-wallpaper [class*="CommonLayout_root"],
 body.ym-has-live-wallpaper [class*="MainLayout_root"],
 body.ym-has-live-wallpaper [class*="DefaultLayout_root"],
@@ -2118,15 +2124,43 @@ body.ym-has-live-wallpaper [class*="Page_root"],
 body.ym-has-live-wallpaper [class*="MainPage_root"],
 body.ym-has-live-wallpaper [class*="Content_root"],
 body.ym-has-live-wallpaper [class*="Content_main"],
-body.ym-has-live-wallpaper [class*="VibePage_root"],
-body.ym-has-live-wallpaper [class*="VibePage_bigCardPanelBackground"],
-body.ym-has-live-wallpaper [class*="VibePage_meta"],
 body.ym-has-live-wallpaper [class*="Desktop_root"],
 body.ym-has-live-wallpaper [class*="ApplicationDesktop_root"],
 body.ym-has-live-wallpaper [class*="WithTopBanner_root"],
 body.ym-has-live-wallpaper [class*="WithTopBanner_content"],
+body.ym-has-live-wallpaper [class*="RootLayout_root"],
+body.ym-has-live-wallpaper [class*="layout_root"],
 body.ym-has-live-wallpaper main,
-body.ym-has-live-wallpaper section[class*="MainLayout_content"] {
+body.ym-has-live-wallpaper section[class*="MainLayout_content"],
+body.ym-has-live-wallpaper [class*="CollectionPage_"],
+body.ym-has-live-wallpaper [class*="ArtistPage_"],
+body.ym-has-live-wallpaper [class*="AlbumPage_"],
+body.ym-has-live-wallpaper [class*="PlaylistPage_"],
+body.ym-has-live-wallpaper [class*="SearchPage_"],
+body.ym-has-live-wallpaper [class*="ScrollContainer_"] {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* My Wave (Моя волна) Transparency */
+body.ym-has-live-wallpaper [class*="VibePage_"],
+body.ym-has-live-wallpaper [class*="VibePage_"]::before,
+body.ym-has-live-wallpaper [class*="VibePage_"]::after,
+body.ym-has-live-wallpaper [class*="Vibe_"],
+body.ym-has-live-wallpaper [class*="Vibe_"]::before,
+body.ym-has-live-wallpaper [class*="Vibe_"]::after,
+body.ym-has-live-wallpaper [class*="WheelDesktop_"],
+body.ym-has-live-wallpaper [class*="WheelDesktop_"]::before,
+body.ym-has-live-wallpaper [class*="WheelDesktop_"]::after,
+body.ym-has-live-wallpaper [class*="VibeLayout"],
+body.ym-has-live-wallpaper [class*="VibeLayout"]::before,
+body.ym-has-live-wallpaper [class*="VibeLayout"]::after,
+body.ym-has-live-wallpaper [class*="bigCardPanelBackground"],
+body.ym-has-live-wallpaper [class*="bigCardPanelBackground"]::before,
+body.ym-has-live-wallpaper [class*="bigCardPanelBackground"]::after,
+body.ym-has-live-wallpaper div[data-test-id="VIBE_PAGE"],
+body.ym-has-live-wallpaper div[data-test-id="VIBE_BLOCK"],
+body.ym-has-live-wallpaper div[data-test-id="FULLSCREEN_PLAYER_MODAL"] {
   background: transparent !important;
   background-color: transparent !important;
 }
@@ -2144,13 +2178,14 @@ body.ym-has-live-wallpaper aside,
 body.ym-has-live-wallpaper aside[data-test-id="NAVBAR"],
 body.ym-has-live-wallpaper [class*="DefaultLayout_navbar"],
 body.ym-has-live-wallpaper [class*="Navbar_root"],
+body.ym-has-live-wallpaper [class*="NavbarDesktop_root"],
 body.ym-has-live-wallpaper [class*="SideNavigation_root"],
 body.ym-has-live-wallpaper [class*="Navigation_root"],
 body.ym-has-live-wallpaper nav {
-  background: rgba(10, 10, 16, 0.35) !important;
-  background-color: rgba(10, 10, 16, 0.35) !important;
-  backdrop-filter: blur(20px) saturate(150%) !important;
-  -webkit-backdrop-filter: blur(20px) saturate(150%) !important;
+  background: rgba(10, 10, 16, 0.45) !important;
+  background-color: rgba(10, 10, 16, 0.45) !important;
+  backdrop-filter: blur(24px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(150%) !important;
   border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 
@@ -2158,7 +2193,6 @@ body.ym-has-live-wallpaper aside *,
 body.ym-has-live-wallpaper aside[data-test-id="NAVBAR"] *,
 body.ym-has-live-wallpaper [class*="Navbar_root"] *,
 body.ym-has-live-wallpaper [class*="DefaultLayout_navbar"] *,
-body.ym-has-live-wallpaper [class*="NavbarDesktop_root"],
 body.ym-has-live-wallpaper [class*="NavbarDesktop_root"] *,
 body.ym-has-live-wallpaper [class*="NavbarDesktop_"],
 body.ym-has-live-wallpaper [class*="NavbarDesktop_"] *,
