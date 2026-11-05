@@ -1,6 +1,32 @@
 // === Yandex Music Mod Preload Integration ===
 (function () {
   try {
+    // Polyfill self.crypto.randomUUID and navigator.storage.getDirectory
+    try {
+      if (typeof window !== "undefined") {
+        if (!window.crypto) window.crypto = {};
+        if (!window.crypto.randomUUID) {
+          const genUUID = () => "10000000-1000-4000-8000-100000000000".replace(/[018]/g, c =>
+            (+c ^ (window.crypto.getRandomValues ? window.crypto.getRandomValues(new Uint8Array(1))[0] : Math.floor(Math.random() * 256)) & 15 >> +c / 4).toString(16)
+          );
+          try {
+            Object.defineProperty(window.crypto, "randomUUID", { value: genUUID, configurable: true, writable: true });
+          } catch (_e) {
+            window.crypto.randomUUID = genUUID;
+          }
+        }
+        if (typeof self !== "undefined" && (!self.crypto || !self.crypto.randomUUID)) {
+          self.crypto = window.crypto;
+        }
+      }
+      if (typeof navigator !== "undefined" && navigator.storage && !navigator.storage.getDirectory) {
+        navigator.storage.getDirectory = async () => ({
+          getFileHandle: async () => null,
+          getDirectoryHandle: async () => null,
+        });
+      }
+    } catch (_pe) {}
+
     const electron = require("electron");
 
     // 0. Audio element capture (runs before React / Next.js chunks load)

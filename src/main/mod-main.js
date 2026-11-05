@@ -73,23 +73,7 @@ const fs = require("fs");
 const https = require("https");
 const { pathToFileURL } = require("url");
 
-// Register custom scheme privileges before app ready
-try {
-  if (protocol && protocol.registerSchemesAsPrivileged) {
-    protocol.registerSchemesAsPrivileged([
-      {
-        scheme: "ym-media",
-        privileges: {
-          standard: true,
-          secure: true,
-          supportFetchAPI: true,
-          corsEnabled: true,
-          stream: true
-        }
-      }
-    ]);
-  }
-} catch (e) {}
+// Protocol ym-media handled dynamically without registerSchemesAsPrivileged
 const { SettingsManager } = require("./settings");
 const appFolder = app ? app.getPath("userData") : path.join(process.env.APPDATA || "", "YandexMusic");
 const { DiscordRPC } = require("./discord-rpc");

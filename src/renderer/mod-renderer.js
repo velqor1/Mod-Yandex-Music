@@ -3836,7 +3836,7 @@ const BUILTIN_SYNCED_LYRICS = {
       <img id="ym-live-wallpaper-image" style="display:none;" />
       <div id="ym-live-wallpaper-overlay"></div>
     `;
-    document.body.prepend(container);
+    document.body.appendChild(container);
 
     // Download completed listener from VSThemes window
     if (window.yandexMusicMod && window.yandexMusicMod.onWallpaperDownloaded) {
@@ -3976,6 +3976,15 @@ const BUILTIN_SYNCED_LYRICS = {
       if (cvs) cvs.style.display = "none";
       if (img) img.style.display = "none";
       if (vid) {
+        if (!activeUrl) {
+          vid.pause();
+          vid.style.display = "none";
+          if (cvs) {
+            cvs.style.display = "block";
+            startCanvasWallpaper(cvs, "starfield");
+          }
+          return;
+        }
         vid.style.display = "block";
         vid.onerror = () => {
           console.warn("[Wallpaper Video] Error loading video, falling back to starfield canvas:", vid.src);

@@ -418,47 +418,48 @@ try {
 
         injected_html_count = 0
 
-        tag_to_inject = '<script id="ym-mod-renderer-script" src="/yandexMusicMod/renderer.js"></script><link id="ym-mod-renderer-style" rel="stylesheet" href="/yandexMusicMod/renderer.css" />'
-
-
+        polyfill_tag = (
+            '<script id="ym-mod-poly">'
+            'if(typeof self!=="undefined"){'
+            'if(!self.crypto)self.crypto={};'
+            'if(!self.crypto.randomUUID)self.crypto.randomUUID=()=>"10000000-1000-4000-8000-100000000000".replace(/[018]/g,c=>(+c^Math.floor(Math.random()*256)&15>>+c/4).toString(16));'
+            '}'
+            'if(typeof window!=="undefined"&&window.crypto&&!window.crypto.randomUUID)window.crypto.randomUUID=self.crypto.randomUUID;'
+            'if(typeof navigator!=="undefined"&&navigator.storage&&!navigator.storage.getDirectory){navigator.storage.getDirectory=async()=>({getFileHandle:async()=>null,getDirectoryHandle:async()=>null});}'
+            '</script>'
+        )
+        tag_to_inject = (
+            '<script id="ym-mod-renderer-script" src="/yandexMusicMod/renderer.js" defer></script>'
+            '<link id="ym-mod-renderer-style" rel="stylesheet" href="/yandexMusicMod/renderer.css" />'
+        )
 
         for root, _, files in os.walk(app_dir):
-
             if "yandexMusicMod" in root:
-
                 continue
-
             for file in files:
-
                 if file.endswith(".html"):
-
                     html_file = os.path.join(root, file)
-
                     with open(html_file, "r", encoding="utf-8") as f:
-
                         html_content = f.read()
 
-                    if "/yandexMusicMod/renderer.js" not in html_content:
-
-                        if "</head>" in html_content:
-
-                            html_content = html_content.replace("</head>", f"{tag_to_inject}</head>")
-
-                        elif "<head>" in html_content:
-
-                            html_content = html_content.replace("<head>", f"<head>{tag_to_inject}")
-
+                    # Always inject polyfill before any script in <head>
+                    if "ym-mod-poly" not in html_content:
+                        if "<head>" in html_content:
+                            html_content = html_content.replace("<head>", f"<head>{polyfill_tag}")
                         else:
+                            html_content = polyfill_tag + html_content
 
+                    if "/yandexMusicMod/renderer.js" not in html_content:
+                        if "</head>" in html_content:
+                            html_content = html_content.replace("</head>", f"{tag_to_inject}</head>")
+                        elif "<head>" in html_content:
+                            html_content = html_content.replace("<head>", f"<head>{tag_to_inject}")
+                        else:
                             html_content = tag_to_inject + html_content
 
-                        with open(html_file, "w", encoding="utf-8") as f:
-
-                            f.write(html_content)
-
-                        injected_html_count += 1
-
-
+                    with open(html_file, "w", encoding="utf-8") as f:
+                        f.write(html_content)
+                    injected_html_count += 1
 
         print(f"[+] Injected mod tags into {injected_html_count} HTML files.")
 
