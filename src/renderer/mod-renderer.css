@@ -2125,17 +2125,35 @@ body.ym-has-live-wallpaper section[class*="MainLayout_content"] {
 
 body.ym-has-live-wallpaper [class*="PlayerBarDesktop_root"],
 body.ym-has-live-wallpaper section[data-test-id="PLAYERBAR_DESKTOP"] {
-  background: rgba(16, 16, 20, 0.78) !important;
-  backdrop-filter: blur(28px) saturate(160%) !important;
-  -webkit-backdrop-filter: blur(28px) saturate(160%) !important;
+  background: rgba(14, 14, 18, 0.55) !important;
+  backdrop-filter: blur(24px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(160%) !important;
   border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
+/* Glass Transparency for Left Navigation Sidebar */
+body.ym-has-live-wallpaper aside,
+body.ym-has-live-wallpaper aside[data-test-id="NAVBAR"],
 body.ym-has-live-wallpaper [class*="NavbarDesktop_root"],
-body.ym-has-live-wallpaper aside {
-  background: rgba(14, 14, 18, 0.72) !important;
-  backdrop-filter: blur(24px) saturate(150%) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(150%) !important;
+body.ym-has-live-wallpaper [class*="NavbarDesktop_"],
+body.ym-has-live-wallpaper [class*="SideNavigation_root"],
+body.ym-has-live-wallpaper [class*="Navigation_root"],
+body.ym-has-live-wallpaper nav {
+  background: rgba(10, 10, 14, 0.22) !important;
+  background-color: rgba(10, 10, 14, 0.22) !important;
+  backdrop-filter: blur(20px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(150%) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+body.ym-has-live-wallpaper aside *,
+body.ym-has-live-wallpaper aside[data-test-id="NAVBAR"] *,
+body.ym-has-live-wallpaper [class*="NavbarDesktop_root"] * {
+  background-color: transparent !important;
+}
+
+body.ym-has-live-wallpaper .ym-mod-sidebar-container {
+  background: transparent !important;
 }
 
 /* ========================================================

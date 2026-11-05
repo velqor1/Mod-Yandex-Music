@@ -3553,36 +3553,90 @@ const BUILTIN_SYNCED_LYRICS = {
   // ==========================================
   const WALLPAPER_PRESETS = [
     {
+      id: "cyberpunk_city",
+      title: "Cyberpunk Night City",
+      desc: "Неоновый мегаполис будущего, небоскрёбы и ночной дождь",
+      type: "video",
+      badge: "Cyberpunk Loop",
+      preview: "https://i.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif",
+      url: "https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.mp4"
+    },
+    {
+      id: "lofi_girl",
+      title: "Lofi Anime Study",
+      desc: "Знаменитая Lofi Girl в наушниках с мягким дождём за окном",
+      type: "video",
+      badge: "Lofi Girl Loop",
+      preview: "https://i.giphy.com/media/3o7TKMt1VVNkHV2PaE/giphy.gif",
+      url: "https://media.giphy.com/media/3o7TKMt1VVNkHV2PaE/giphy.mp4"
+    },
+    {
       id: "synthwave",
       title: "Synthwave Sunset",
-      desc: "Неоновое закатное солнце и бесконечная ретровейв сетка",
+      desc: "Ретровейв закат, неоновое солнце и пальмы Майами 80-х",
       type: "video",
-      badge: "4K Видео",
-      preview: "https://images.unsplash.com/photo-1508739773434-c26b3d09e071?w=400&q=80",
-      url: "https://assets.mixkit.co/videos/preview/mixkit-set-of-plateaus-seen-from-the-sky-in-a-sunset-26070-large.mp4"
+      badge: "80s Retro Loop",
+      preview: "https://i.giphy.com/media/26AHG5KGFxSkUWw1i/giphy.gif",
+      url: "https://media.giphy.com/media/26AHG5KGFxSkUWw1i/giphy.mp4"
     },
     {
-      id: "cyberpunk",
-      title: "Cyberpunk Rain",
-      desc: "Атмосферный ночной неоновый город под дождем",
+      id: "anime_neon",
+      title: "Tokyo Neon Streets",
+      desc: "Аниме ночной переулок Токио с мерцающими неоновыми вывесками",
       type: "video",
-      badge: "Видео",
-      preview: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=400&q=80",
-      url: "https://assets.mixkit.co/videos/preview/mixkit-digital-animation-of-screens-with-glitch-effect-31830-large.mp4"
+      badge: "Tokyo Loop",
+      preview: "https://i.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif",
+      url: "https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.mp4"
     },
     {
-      id: "lofi",
-      title: "Cozy Lofi Night",
-      desc: "Уютный чилл-фон для вечернего прослушивания",
+      id: "retrowave_grid",
+      title: "Neon Horizon Grid",
+      desc: "Бесконечный неоновый горизонт и футуристичная кибер-сетка",
       type: "video",
-      badge: "HD Видео",
-      preview: "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=400&q=80",
-      url: "https://assets.mixkit.co/videos/preview/mixkit-starry-night-sky-with-a-shooting-star-34538-large.mp4"
+      badge: "Outrun Grid",
+      preview: "https://i.giphy.com/media/3o7aCSPqXE5C6T8tBC/giphy.gif",
+      url: "https://media.giphy.com/media/3o7aCSPqXE5C6T8tBC/giphy.mp4"
+    },
+    {
+      id: "lofi_rain",
+      title: "Cozy Lofi Rain",
+      desc: "Уютная ночная комната, мягкий свет лампы и капли по стеклу",
+      type: "video",
+      badge: "Rain Loop",
+      preview: "https://i.giphy.com/media/13HgwGsXF0aiGY/giphy.gif",
+      url: "https://media.giphy.com/media/13HgwGsXF0aiGY/giphy.mp4"
+    },
+    {
+      id: "anime_clouds",
+      title: "Aesthetic Sunset Clouds",
+      desc: "Живописные пастельные аниме-облака на закате солнца",
+      type: "video",
+      badge: "Anime Sky",
+      preview: "https://i.giphy.com/media/3o7aD2saalBwwftBIY/giphy.gif",
+      url: "https://media.giphy.com/media/3o7aD2saalBwwftBIY/giphy.mp4"
+    },
+    {
+      id: "coffee_vinyl",
+      title: "Coffee & Vinyl Vibe",
+      desc: "Горячий кофе, крутящийся винил и дождливый вечер",
+      type: "video",
+      badge: "Chill Vibe",
+      preview: "https://i.giphy.com/media/3oKIPnAiaMCws8nOsE/giphy.gif",
+      url: "https://media.giphy.com/media/3oKIPnAiaMCws8nOsE/giphy.mp4"
+    },
+    {
+      id: "starry_galaxy",
+      title: "Anime Starry Galaxy",
+      desc: "Падающие звёзды, созвездия и глубокое космическое сияние",
+      type: "video",
+      badge: "Space Loop",
+      preview: "https://i.giphy.com/media/d2jjuAZzDSVLZ5kI/giphy.gif",
+      url: "https://media.giphy.com/media/d2jjuAZzDSVLZ5kI/giphy.mp4"
     },
     {
       id: "matrix",
       title: "Matrix Code Rain",
-      desc: "Интерактивный зеленый цифровой дождь 60 FPS",
+      desc: "Интерактивный зелёный цифровой дождь 60 FPS",
       type: "canvas",
       badge: "60 FPS Canvas",
       preview: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=400&q=80",
@@ -3591,7 +3645,7 @@ const BUILTIN_SYNCED_LYRICS = {
     {
       id: "waves",
       title: "Neon Audio Waves",
-      desc: "Пульсирующие градиентные волны света",
+      desc: "Градиентные пульсирующие волны света в ритме музыки",
       type: "canvas",
       badge: "60 FPS Canvas",
       preview: "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=400&q=80",
@@ -3599,8 +3653,8 @@ const BUILTIN_SYNCED_LYRICS = {
     },
     {
       id: "hyperspace",
-      title: "Cosmic Starfield",
-      desc: "Полет через трехмерное пространство звезд",
+      title: "Cosmic Warp 3D",
+      desc: "Плавный трёхмерный полёт сквозь гиперпространство звёзд",
       type: "canvas",
       badge: "3D Canvas",
       preview: "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?w=400&q=80",
@@ -3716,11 +3770,21 @@ const BUILTIN_SYNCED_LYRICS = {
       if (img) img.style.display = "none";
       if (vid) {
         vid.style.display = "block";
+        vid.onerror = () => {
+          console.warn("[Wallpaper Video] Error loading video, falling back to starfield canvas:", vid.src);
+          vid.style.display = "none";
+          if (cvs) {
+            cvs.style.display = "block";
+            startCanvasWallpaper(cvs, "starfield");
+          }
+        };
         if (vid.src !== activeUrl) {
           vid.src = activeUrl;
           vid.load();
         }
-        vid.play().catch(() => {});
+        vid.play().catch((err) => {
+          console.warn("[Wallpaper Video] Play error:", err);
+        });
       }
     }
   }

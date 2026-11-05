@@ -187,12 +187,21 @@ def patch_executable_integrity(asar_path):
 
 
     if patched:
-
-        with open(exe_file, "wb") as f:
-
-            f.write(exe_data)
-
-        print("[+] Executable integrity and fuses successfully configured!")
+        import time
+        saved = False
+        for attempt in range(10):
+            try:
+                check_process_running()
+                with open(exe_file, "wb") as f:
+                    f.write(exe_data)
+                saved = True
+                break
+            except PermissionError:
+                time.sleep(1)
+        if saved:
+            print("[+] Executable integrity and fuses successfully configured!")
+        else:
+            print("[!] Warning: Could not write to executable due to lock, will retry on next run.")
 
 
 
