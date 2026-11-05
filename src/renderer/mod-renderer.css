@@ -2110,13 +2110,18 @@ body.ym-has-live-wallpaper {
 }
 
 body.ym-has-live-wallpaper #root,
+body.ym-has-live-wallpaper [class*="CommonLayout_root"],
 body.ym-has-live-wallpaper [class*="MainLayout_root"],
 body.ym-has-live-wallpaper [class*="DefaultLayout_root"],
+body.ym-has-live-wallpaper [class*="DefaultLayout_rootNewVibe"],
 body.ym-has-live-wallpaper [class*="Page_root"],
 body.ym-has-live-wallpaper [class*="MainPage_root"],
 body.ym-has-live-wallpaper [class*="Content_root"],
+body.ym-has-live-wallpaper [class*="Content_main"],
 body.ym-has-live-wallpaper [class*="Desktop_root"],
 body.ym-has-live-wallpaper [class*="ApplicationDesktop_root"],
+body.ym-has-live-wallpaper [class*="WithTopBanner_root"],
+body.ym-has-live-wallpaper [class*="WithTopBanner_content"],
 body.ym-has-live-wallpaper main,
 body.ym-has-live-wallpaper section[class*="MainLayout_content"] {
   background: transparent !important;
@@ -2132,21 +2137,15 @@ body.ym-has-live-wallpaper section[data-test-id="PLAYERBAR_DESKTOP"] {
 }
 
 /* Glass Transparency for Left Navigation Sidebar */
-body.ym-has-live-wallpaper [class*="CommonLayout_root"],
-body.ym-has-live-wallpaper [class*="WithTopBanner_root"],
-body.ym-has-live-wallpaper [class*="WithTopBanner_content"],
-body.ym-has-live-wallpaper [class*="DefaultLayout_rootNewVibe"],
-body.ym-has-live-wallpaper [class*="DefaultLayout_navbar"],
-body.ym-has-live-wallpaper [class*="Navbar_root"],
 body.ym-has-live-wallpaper aside,
 body.ym-has-live-wallpaper aside[data-test-id="NAVBAR"],
-body.ym-has-live-wallpaper [class*="NavbarDesktop_root"],
-body.ym-has-live-wallpaper [class*="NavbarDesktop_"],
+body.ym-has-live-wallpaper [class*="DefaultLayout_navbar"],
+body.ym-has-live-wallpaper [class*="Navbar_root"],
 body.ym-has-live-wallpaper [class*="SideNavigation_root"],
 body.ym-has-live-wallpaper [class*="Navigation_root"],
 body.ym-has-live-wallpaper nav {
-  background: rgba(10, 10, 14, 0.22) !important;
-  background-color: rgba(10, 10, 14, 0.22) !important;
+  background: rgba(10, 10, 16, 0.35) !important;
+  background-color: rgba(10, 10, 16, 0.35) !important;
   backdrop-filter: blur(20px) saturate(150%) !important;
   -webkit-backdrop-filter: blur(20px) saturate(150%) !important;
   border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
@@ -2155,7 +2154,11 @@ body.ym-has-live-wallpaper nav {
 body.ym-has-live-wallpaper aside *,
 body.ym-has-live-wallpaper aside[data-test-id="NAVBAR"] *,
 body.ym-has-live-wallpaper [class*="Navbar_root"] *,
+body.ym-has-live-wallpaper [class*="DefaultLayout_navbar"] *,
+body.ym-has-live-wallpaper [class*="NavbarDesktop_root"],
 body.ym-has-live-wallpaper [class*="NavbarDesktop_root"] *,
+body.ym-has-live-wallpaper [class*="NavbarDesktop_"],
+body.ym-has-live-wallpaper [class*="NavbarDesktop_"] *,
 body.ym-has-live-wallpaper [class*="NavbarDesktop_scrollableContainer"],
 body.ym-has-live-wallpaper [class*="NavbarDesktop_scrollableContent"],
 body.ym-has-live-wallpaper [class*="NavbarDesktop_navigation"],
@@ -2163,7 +2166,14 @@ body.ym-has-live-wallpaper [class*="NavbarDesktop_navigationGroup"],
 body.ym-has-live-wallpaper [class*="PinsList_"],
 body.ym-has-live-wallpaper [class*="PinsList_"] *,
 body.ym-has-live-wallpaper [class*="NavbarDesktopAnimatedBar_"],
-body.ym-has-live-wallpaper [class*="NavbarDesktopUnauthorizedBar_"] {
+body.ym-has-live-wallpaper [class*="NavbarDesktopUnauthorizedBar_"],
+body.ym-has-live-wallpaper [class*="NavbarDesktopUserWidget_"],
+body.ym-has-live-wallpaper [class*="UserProfile_root"],
+body.ym-has-live-wallpaper [class*="UserProfile_root"] *,
+body.ym-has-live-wallpaper [class*="SideNavigation_root"] *,
+body.ym-has-live-wallpaper [class*="Navigation_root"] *,
+body.ym-has-live-wallpaper nav * {
+  background: transparent !important;
   background-color: transparent !important;
 }
 

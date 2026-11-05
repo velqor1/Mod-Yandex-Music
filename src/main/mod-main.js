@@ -892,9 +892,22 @@ function ensureWallpaperDownloadListener() {
       fs.mkdirSync(wallpapersDir, { recursive: true });
     } catch (e) {}
 
-    const cleanName = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const cleanName = (filename || "wallpaper").replace(/[^a-zA-Z0-9._-]/g, "_");
     const targetPath = path.join(wallpapersDir, `${Date.now()}_${cleanName}`);
     item.setSavePath(targetPath);
+
+    // If download was initiated by our background worker window, close the worker now that download is running!
+    try {
+      if (webContents && webContents.getOwnerBrowserWindow) {
+        const ownerWin = webContents.getOwnerBrowserWindow();
+        if (ownerWin && ownerWin !== vsthemesWindow && ownerWin !== overlayWindow && ownerWin !== karaokeWindow) {
+          modLog("[Closing background download worker]:", ownerWin.id);
+          setTimeout(() => {
+            try { if (!ownerWin.isDestroyed()) ownerWin.destroy(); } catch(e) {}
+          }, 1500);
+        }
+      }
+    } catch(e) {}
 
     BrowserWindow.getAllWindows().forEach((win) => {
       if (!win.isDestroyed() && win !== overlayWindow && win !== karaokeWindow) {
@@ -922,35 +935,85 @@ function ensureWallpaperDownloadListener() {
     item.once("done", async (_e, state) => {
       modLog("[will-download finished]: state =", state, "target =", targetPath);
       if (state === "completed") {
-        let finalPath = targetPath;
-        let isZip = targetPath.toLowerCase().endsWith(".zip");
-        if (!isZip && fs.existsSync(targetPath)) {
-          try {
-            const buf = Buffer.alloc(4);
-            const fd = fs.openSync(targetPath, "r");
-            fs.readSync(fd, buf, 0, 4, 0);
-            fs.closeSync(fd);
-            if (buf[0] === 0x50 && buf[1] === 0x4B && buf[2] === 0x03 && buf[3] === 0x04) {
-              isZip = true;
-            }
-          } catch(e) {}
+        if (!fs.existsSync(targetPath)) {
+          modLog("[Target file does not exist after completion]:", targetPath);
+          return;
         }
 
+        // Inspect file content header (first 512 bytes)
+        const headerBuf = Buffer.alloc(512);
+        let bytesRead = 0;
+        try {
+          const fd = fs.openSync(targetPath, "r");
+          bytesRead = fs.readSync(fd, headerBuf, 0, 512, 0);
+          fs.closeSync(fd);
+        } catch (e) {}
+
+        const headerStr = headerBuf.slice(0, bytesRead).toString("utf-8").toLowerCase();
+
+        // 1. Check if it's an HTML page or error response rather than media
+        const isHtml = headerStr.includes("<!doctype html") || 
+                       headerStr.includes("<html") || 
+                       headerStr.includes("<head") || 
+                       headerStr.includes("<body");
+
+        if (isHtml) {
+          modLog("[Discarded downloaded HTML/error page]:", targetPath);
+          try { fs.unlinkSync(targetPath); } catch (e) {}
+          try {
+            if (vsthemesWindow && !vsthemesWindow.isDestroyed()) {
+              vsthemesWindow.webContents.executeJavaScript(`
+                if (window.__showDownloadToast) {
+                  window.__showDownloadToast("Не удалось скачать: сервер вернул страницу ошибки", false);
+                }
+              `).catch(() => {});
+            }
+          } catch (e) {}
+          return;
+        }
+
+        // 2. Check if ZIP archive (magic bytes PK\x03\x04 or .zip)
+        let isZip = targetPath.toLowerCase().endsWith(".zip") ||
+                    (bytesRead >= 4 && headerBuf[0] === 0x50 && headerBuf[1] === 0x4b && headerBuf[2] === 0x03 && headerBuf[3] === 0x04);
+
+        let finalPath = targetPath;
         if (isZip) {
           try {
-            finalPath = await extractWallpaperZip(targetPath, wallpapersDir);
+            let zipFile = targetPath;
+            if (!zipFile.toLowerCase().endsWith(".zip")) {
+              zipFile = `${targetPath}.zip`;
+              try { fs.renameSync(targetPath, zipFile); } catch (e) { zipFile = targetPath; }
+            }
+            finalPath = await extractWallpaperZip(zipFile, wallpapersDir);
           } catch (err) {
             modLog("[VSThemes Unpack Error]:", err);
           }
+        } else {
+          // Check if video/image without proper extension
+          const isMp4 = headerStr.includes("ftyp") || targetPath.toLowerCase().endsWith(".mp4");
+          const isWebm = (bytesRead >= 4 && headerBuf[0] === 0x1a && headerBuf[1] === 0x45 && headerBuf[2] === 0xdf && headerBuf[3] === 0xa3) || targetPath.toLowerCase().endsWith(".webm");
+          const isGif = headerStr.startsWith("gif8") || targetPath.toLowerCase().endsWith(".gif");
+
+          if (isMp4 && !targetPath.toLowerCase().endsWith(".mp4")) {
+            const renamed = `${targetPath}.mp4`;
+            try { fs.renameSync(targetPath, renamed); finalPath = renamed; } catch(e) {}
+          } else if (isWebm && !targetPath.toLowerCase().endsWith(".webm")) {
+            const renamed = `${targetPath}.webm`;
+            try { fs.renameSync(targetPath, renamed); finalPath = renamed; } catch(e) {}
+          } else if (isGif && !targetPath.toLowerCase().endsWith(".gif")) {
+            const renamed = `${targetPath}.gif`;
+            try { fs.renameSync(targetPath, renamed); finalPath = renamed; } catch(e) {}
+          }
         }
-        const finalName = path.basename(finalPath);
+
+        const finalName = path.basename(finalPath).replace(/^(\d+_)/, "").replace(/[\-_]/g, " ");
         modLog("[VSThemes Wallpaper Ready]:", finalPath);
 
         try {
           if (vsthemesWindow && !vsthemesWindow.isDestroyed()) {
             vsthemesWindow.webContents.executeJavaScript(`
               if (window.__showDownloadToast) {
-                window.__showDownloadToast("Обои успешно скачаны и установлены на фон!", true);
+                window.__showDownloadToast("Обои «${finalName.replace(/"/g, '\\"')}» установлены на фон!", true);
               }
             `).catch(() => {});
           }
@@ -996,6 +1059,37 @@ function openVSThemesWindow() {
       },
     });
 
+    const spawnDownloadWorker = (targetUrl) => {
+      modLog("[Spawning background download worker for gateway]:", targetUrl);
+      const worker = new BrowserWindow({
+        show: false,
+        width: 800,
+        height: 600,
+        webPreferences: {
+          nodeIntegration: false,
+          contextIsolation: true,
+        },
+      });
+
+      worker.webContents.setWindowOpenHandler((details) => {
+        modLog("[Worker windowOpen]:", details.url);
+        worker.loadURL(details.url);
+        return { action: "deny" };
+      });
+
+      const refererUrl = (vsthemesWindow && !vsthemesWindow.isDestroyed()) ? (vsthemesWindow.webContents.getURL() || "https://vsthemes.org/") : "https://vsthemes.org/";
+      worker.loadURL(targetUrl, {
+        userAgent: (vsthemesWindow && !vsthemesWindow.isDestroyed()) ? vsthemesWindow.webContents.getUserAgent() : undefined,
+        extraHeaders: `Referer: ${refererUrl}\n`,
+      }).catch((e) => {
+        modLog("[download worker load error]:", e);
+      });
+
+      setTimeout(() => {
+        if (!worker.isDestroyed()) worker.destroy();
+      }, 60000);
+    };
+
     // Intercept target="_blank" and window.open
     vsthemesWindow.webContents.setWindowOpenHandler((details) => {
       const targetUrl = details.url;
@@ -1011,16 +1105,18 @@ function openVSThemesWindow() {
         return { action: "deny" };
       }
 
-      // Detect download endpoints / file downloads
-      const isDownload = targetUrl.match(/\.(zip|rar|7z|mp4|webm|gif)(\?.*)?$/i) ||
-                         targetUrl.includes("download") ||
-                         targetUrl.includes("/load/") ||
-                         targetUrl.includes("/get/") ||
-                         targetUrl.includes("server=") ||
-                         targetUrl.includes("/dnew/download");
+      // 1. Dynamic download gateways (do=download, /load/, server=, etc.)
+      if (targetUrl.includes("do=download") || targetUrl.includes("/load/") || targetUrl.includes("/dnew/download") || targetUrl.includes("server=")) {
+        spawnDownloadWorker(targetUrl);
+        return { action: "deny" };
+      }
 
-      if (isDownload) {
-        modLog("[setWindowOpenHandler triggering downloadURL]:", targetUrl);
+      // 2. Direct static file downloads (.zip, .mp4, etc.)
+      const isDirectFile = targetUrl.match(/\.(zip|rar|7z|mp4|webm|gif)(\?.*)?$/i) ||
+                           targetUrl.includes("/get/");
+
+      if (isDirectFile) {
+        modLog("[Direct file downloadURL]:", targetUrl);
         vsthemesWindow.webContents.downloadURL(targetUrl, {
           headers: {
             "Referer": vsthemesWindow.webContents.getURL() || "https://vsthemes.org/",
@@ -1030,7 +1126,7 @@ function openVSThemesWindow() {
         return { action: "deny" };
       }
 
-      // Normal navigation within vsthemes.org
+      // 3. Normal navigation within vsthemes.org (like clicking category or card)
       if (targetUrl.includes("vsthemes.org")) {
         vsthemesWindow.loadURL(targetUrl).catch(() => {});
         return { action: "deny" };
@@ -1042,9 +1138,14 @@ function openVSThemesWindow() {
     // Intercept in-page navigation (links that might directly point to files or download endpoints)
     vsthemesWindow.webContents.on("will-navigate", (event, navUrl) => {
       modLog("[will-navigate]:", navUrl);
+      if (navUrl.includes("do=download") || navUrl.includes("/load/") || navUrl.includes("/dnew/download") || navUrl.includes("server=")) {
+        event.preventDefault();
+        modLog("[Intercepted gateway will-navigate, spawning worker]:", navUrl);
+        spawnDownloadWorker(navUrl);
+        return;
+      }
       const isDirectDownload = navUrl.match(/\.(zip|rar|7z|mp4|webm|gif)(\?.*)?$/i) ||
-                               navUrl.includes("/get/") ||
-                               navUrl.includes("server=");
+                               navUrl.includes("/get/");
       if (isDirectDownload) {
         event.preventDefault();
         modLog("[Intercepted direct download will-navigate]:", navUrl);
@@ -1063,7 +1164,11 @@ function openVSThemesWindow() {
       childWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
       childWindow.webContents.on("will-navigate", (event, navUrl) => {
         modLog("[Child Window will-navigate]:", navUrl);
-        if (navUrl.match(/\.(zip|rar|7z|mp4|webm|gif)(\?.*)?$/i) || navUrl.includes("download") || navUrl.includes("server=") || navUrl.includes("/load/")) {
+        if (navUrl.includes("do=download") || navUrl.includes("/load/") || navUrl.includes("/dnew/download") || navUrl.includes("server=")) {
+          event.preventDefault();
+          spawnDownloadWorker(navUrl);
+          childWindow.close();
+        } else if (navUrl.match(/\.(zip|rar|7z|mp4|webm|gif)(\?.*)?$/i) || navUrl.includes("/get/")) {
           event.preventDefault();
           vsthemesWindow.webContents.downloadURL(navUrl, {
             headers: {
@@ -1154,7 +1259,7 @@ function openVSThemesWindow() {
                 if (!el) return;
                 const text = (el.innerText || '').trim();
                 const href = el.getAttribute('href') || el.dataset.url || el.dataset.href || '';
-                if (text.includes('Скачать') || text.includes('Download') || href.includes('download') || href.includes('/load/') || href.includes('server=') || href.match(/\.(zip|rar|mp4|webm)/i)) {
+                if (text.includes('Скачать') || text.includes('Download') || href.includes('download') || href.includes('/load/') || href.includes('server=') || href.match(/\\.(zip|rar|mp4|webm)/i)) {
                   if (window.__showDownloadToast) {
                     window.__showDownloadToast('Запрос принят! Скачивание обоев...', false);
                   }
@@ -1197,7 +1302,7 @@ function setupIpcHandlers() {
     openVSThemesWindow();
   });
 
-  // Local File Selector Dialog for Wallpapers
+  // Local File Selector Dialog for Wallpapers - automatically copies to wallpapers folder
   ipcMain.handle("yandexMusicMod.selectWallpaperFile", async () => {
     const result = await dialog.showOpenDialog({
       title: "Выберите живые обои (MP4, WebM, GIF, JPG, PNG)",
@@ -1211,11 +1316,39 @@ function setupIpcHandlers() {
     if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
       return null;
     }
-    return result.filePaths[0];
+    const srcPath = result.filePaths[0];
+    const wallpapersDir = path.join(appFolder, "wallpapers");
+    try {
+      fs.mkdirSync(wallpapersDir, { recursive: true });
+    } catch (e) {}
+    const cleanName = path.basename(srcPath).replace(/[^a-zA-Z0-9._-]/g, "_");
+    const targetPath = path.join(wallpapersDir, `${Date.now()}_${cleanName}`);
+    try {
+      fs.copyFileSync(srcPath, targetPath);
+      return targetPath;
+    } catch(e) {
+      return srcPath;
+    }
   });
 
-  // Get list of downloaded wallpapers
-    // Delete downloaded wallpaper
+  // Import Wallpaper File (for drag & drop)
+  ipcMain.handle("yandexMusicMod.importWallpaperFile", async (_ev, srcPath) => {
+    if (!srcPath || !fs.existsSync(srcPath)) return null;
+    const wallpapersDir = path.join(appFolder, "wallpapers");
+    try {
+      fs.mkdirSync(wallpapersDir, { recursive: true });
+    } catch (e) {}
+    const cleanName = path.basename(srcPath).replace(/[^a-zA-Z0-9._-]/g, "_");
+    const targetPath = path.join(wallpapersDir, `${Date.now()}_${cleanName}`);
+    try {
+      fs.copyFileSync(srcPath, targetPath);
+      return targetPath;
+    } catch(e) {
+      return srcPath;
+    }
+  });
+
+  // Delete downloaded wallpaper
   ipcMain.handle("yandexMusicMod.deleteDownloadedWallpaper", async (_ev, filePath) => {
     try {
       if (filePath && fs.existsSync(filePath)) {
@@ -1250,7 +1383,6 @@ function setupIpcHandlers() {
       return [];
     }
   });
-
   // Storage API
   ipcMain.handle("yandexMusicMod.getStorageValue", (_ev, key) => {
     return settingsManager.get(key);

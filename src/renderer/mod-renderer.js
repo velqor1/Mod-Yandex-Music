@@ -6132,6 +6132,43 @@ const BUILTIN_SYNCED_LYRICS = {
       }
 
       renderWallpaperGrid();
+
+    // Wallpaper Drag & Drop Support
+    if (!window.__ymWallpaperDndInstalled) {
+      window.__ymWallpaperDndInstalled = true;
+      document.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+      document.addEventListener("drop", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const files = e.dataTransfer && e.dataTransfer.files;
+        if (!files || files.length === 0) return;
+        const file = files[0];
+        const fileName = file.name || "";
+        const filePath = file.path;
+        if (filePath && /\.(mp4|webm|gif|zip)$/i.test(fileName)) {
+          if (window.yandexMusicMod && window.yandexMusicMod.importWallpaperFile) {
+            const importedPath = await window.yandexMusicMod.importWallpaperFile(filePath);
+            if (importedPath) {
+              const isVid = /\.(mp4|webm)$/i.test(importedPath);
+              saveSetting("wallpaper/enabled", true);
+              saveSetting("wallpaper/source", importedPath);
+              saveSetting("wallpaper/type", isVid ? "video" : "image");
+              saveSetting("wallpaper/url", importedPath);
+
+              const enableSwitch = document.getElementById("opt-wallpaper-enable");
+              if (enableSwitch) enableSwitch.checked = true;
+
+              applyLiveWallpaperSettings();
+              showNotification(`Живые обои «${fileName}» добавлены и применены!`, "success");
+              renderWallpaperGrid();
+            }
+          }
+        }
+      });
+    }
     } catch (errWp) {
       console.error("[Mod Settings] Error binding wallpaper controls:", errWp);
     }
