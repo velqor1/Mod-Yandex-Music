@@ -1,3 +1,4 @@
+const http = require("http");
 const BUILTIN_SYNCED_LYRICS = {
   "чувство собственной важности": `[00:00.60]Делаем бабки, но не сегодня
 [00:03.70]На мне большие тряпки, это значит, что я в форме
@@ -789,22 +790,93 @@ function startPlayerStatePolling() {
 
 let vsthemesWindow = null;
 
+// ==========================================
+// LOCAL HTTP MEDIA STREAMING SERVER
+// ==========================================
+let mediaServer = null;
+let mediaServerPort = 0;
+
+function startMediaServer() {
+  if (mediaServer) return;
+  mediaServer = http.createServer((req, res) => {
+    try {
+      const parsed = new URL(req.url, `http://127.0.0.1:${mediaServerPort || 50000}`);
+      let targetFile = parsed.searchParams.get("file");
+      if (!targetFile) {
+        res.writeHead(400);
+        res.end("Missing file parameter");
+        return;
+      }
+      targetFile = decodeURIComponent(targetFile);
+      if (targetFile.startsWith("/") && targetFile.length > 2 && targetFile[2] === ":") {
+        targetFile = targetFile.slice(1);
+      }
+      const normPath = path.normalize(targetFile);
+      if (!fs.existsSync(normPath)) {
+        res.writeHead(404);
+        res.end("Not found");
+        return;
+      }
+
+      const stat = fs.statSync(normPath);
+      const total = stat.size;
+      const range = req.headers.range;
+
+      let contentType = "video/mp4";
+      if (normPath.endsWith(".webm")) contentType = "video/webm";
+      else if (normPath.endsWith(".gif")) contentType = "image/gif";
+      else if (normPath.endsWith(".png")) contentType = "image/png";
+      else if (normPath.endsWith(".jpg") || normPath.endsWith(".jpeg")) contentType = "image/jpeg";
+
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Accept-Ranges", "bytes");
+
+      if (range) {
+        const parts = range.replace(/bytes=/, "").split("-");
+        const partialStart = parts[0];
+        const partialEnd = parts[1];
+
+        const start = parseInt(partialStart, 10);
+        const end = partialEnd ? parseInt(partialEnd, 10) : total - 1;
+        const chunksize = end - start + 1;
+
+        res.writeHead(206, {
+          "Content-Range": `bytes ${start}-${end}/${total}`,
+          "Content-Length": chunksize,
+          "Content-Type": contentType,
+        });
+        const stream = fs.createReadStream(normPath, { start, end });
+        stream.pipe(res);
+      } else {
+        res.writeHead(200, {
+          "Content-Length": total,
+          "Content-Type": contentType,
+        });
+        fs.createReadStream(normPath).pipe(res);
+      }
+    } catch (e) {
+      console.error("[MediaServer Error]", e);
+      try { res.writeHead(500); res.end("Error"); } catch(err) {}
+    }
+  });
+
+  mediaServer.listen(0, "127.0.0.1", () => {
+    mediaServerPort = mediaServer.address().port;
+    modLog("[MediaServer] Listening on port:", mediaServerPort);
+  });
+}
+startMediaServer();
+
 function setupMediaProtocol() {
   try {
-    if (protocol && protocol.handle) {
-      protocol.handle("ym-media", (request) => {
-        try {
-          let raw = request.url.replace(/^ym-media:\/\//, "");
-          let filePath = decodeURIComponent(raw);
-          if (filePath.startsWith("/") && filePath.length > 2 && filePath[2] === ":") {
-            filePath = filePath.slice(1);
-          }
-          const fileUrl = pathToFileURL(filePath).toString();
-          return net.fetch(fileUrl);
-        } catch (err) {
-          console.error("[ym-media error]", err);
-          return new Response("Not found", { status: 404 });
+    if (session && session.defaultSession && session.defaultSession.protocol && session.defaultSession.protocol.registerFileProtocol) {
+      session.defaultSession.protocol.registerFileProtocol("ym-media", (request, callback) => {
+        let raw = request.url.replace(/^ym-media:\/\//, "");
+        let filePath = decodeURIComponent(raw);
+        if (filePath.startsWith("/") && filePath.length > 2 && filePath[2] === ":") {
+          filePath = filePath.slice(1);
         }
+        callback({ path: path.normalize(filePath) });
       });
     }
   } catch (err) {
@@ -820,14 +892,29 @@ async function extractWallpaperZip(zipPath, wallpapersDir) {
     fs.mkdirSync(extractDir, { recursive: true });
   } catch (e) {}
 
-  await new Promise((resolve) => {
-    // Try native Windows tar.exe first (fast, silent)
-    exec(`tar -xf "${zipPath}" -C "${extractDir}"`, (err) => {
-      if (!err) return resolve();
-      // Fallback to powershell Expand-Archive
-      exec(`powershell -NoProfile -Command "Expand-Archive -LiteralPath '${zipPath}' -DestinationPath '${extractDir}' -Force"`, () => {
-        resolve();
+  await new Promise((resolve, reject) => {
+    const yauzl = require("yauzl");
+    yauzl.open(zipPath, { lazyEntries: true }, (err, zipfile) => {
+      if (err) return reject(err);
+      zipfile.readEntry();
+      zipfile.on("entry", (entry) => {
+        const entryPath = path.join(extractDir, entry.fileName);
+        if (/\/$/.test(entry.fileName)) {
+          try { fs.mkdirSync(entryPath, { recursive: true }); } catch (e) {}
+          zipfile.readEntry();
+        } else {
+          try { fs.mkdirSync(path.dirname(entryPath), { recursive: true }); } catch (e) {}
+          zipfile.openReadStream(entry, (errStream, readStream) => {
+            if (errStream) return reject(errStream);
+            const writeStream = fs.createWriteStream(entryPath);
+            readStream.pipe(writeStream);
+            writeStream.on("close", () => zipfile.readEntry());
+            writeStream.on("error", reject);
+          });
+        }
       });
+      zipfile.on("end", resolve);
+      zipfile.on("error", reject);
     });
   });
 
@@ -850,7 +937,6 @@ async function extractWallpaperZip(zipPath, wallpapersDir) {
 
   const media = findMediaFiles(extractDir);
   if (media.length > 0) {
-    // Largest video file is the main wallpaper loop
     media.sort((a, b) => b.size - a.size);
     const chosen = media[0];
     const finalExt = path.extname(chosen.path);
@@ -865,15 +951,6 @@ async function extractWallpaperZip(zipPath, wallpapersDir) {
   }
 
   return zipPath;
-}
-
-function modLog(...args) {
-  const line = `[${new Date().toISOString()}] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')}\n`;
-  try {
-    const logFile = path.join(appFolder, "vsthemes-debug.log");
-    fs.appendFileSync(logFile, line, "utf8");
-  } catch(e) {}
-  console.log(...args);
 }
 
 function ensureWallpaperDownloadListener() {
@@ -895,19 +972,6 @@ function ensureWallpaperDownloadListener() {
     const cleanName = (filename || "wallpaper").replace(/[^a-zA-Z0-9._-]/g, "_");
     const targetPath = path.join(wallpapersDir, `${Date.now()}_${cleanName}`);
     item.setSavePath(targetPath);
-
-    // If download was initiated by our background worker window, close the worker now that download is running!
-    try {
-      if (webContents && webContents.getOwnerBrowserWindow) {
-        const ownerWin = webContents.getOwnerBrowserWindow();
-        if (ownerWin && ownerWin !== vsthemesWindow && ownerWin !== overlayWindow && ownerWin !== karaokeWindow) {
-          modLog("[Closing background download worker]:", ownerWin.id);
-          setTimeout(() => {
-            try { if (!ownerWin.isDestroyed()) ownerWin.destroy(); } catch(e) {}
-          }, 1500);
-        }
-      }
-    } catch(e) {}
 
     BrowserWindow.getAllWindows().forEach((win) => {
       if (!win.isDestroyed() && win !== overlayWindow && win !== karaokeWindow) {
@@ -937,6 +1001,12 @@ function ensureWallpaperDownloadListener() {
       if (state === "completed") {
         if (!fs.existsSync(targetPath)) {
           modLog("[Target file does not exist after completion]:", targetPath);
+          return;
+        }
+
+        const stat = fs.statSync(targetPath);
+        if (stat.size === 0) {
+          try { fs.unlinkSync(targetPath); } catch (e) {}
           return;
         }
 
@@ -994,15 +1064,16 @@ function ensureWallpaperDownloadListener() {
           const isWebm = (bytesRead >= 4 && headerBuf[0] === 0x1a && headerBuf[1] === 0x45 && headerBuf[2] === 0xdf && headerBuf[3] === 0xa3) || targetPath.toLowerCase().endsWith(".webm");
           const isGif = headerStr.startsWith("gif8") || targetPath.toLowerCase().endsWith(".gif");
 
-          if (isMp4 && !targetPath.toLowerCase().endsWith(".mp4")) {
-            const renamed = `${targetPath}.mp4`;
-            try { fs.renameSync(targetPath, renamed); finalPath = renamed; } catch(e) {}
-          } else if (isWebm && !targetPath.toLowerCase().endsWith(".webm")) {
-            const renamed = `${targetPath}.webm`;
-            try { fs.renameSync(targetPath, renamed); finalPath = renamed; } catch(e) {}
-          } else if (isGif && !targetPath.toLowerCase().endsWith(".gif")) {
-            const renamed = `${targetPath}.gif`;
-            try { fs.renameSync(targetPath, renamed); finalPath = renamed; } catch(e) {}
+          let ext = ".mp4";
+          if (isWebm) ext = ".webm";
+          else if (isGif) ext = ".gif";
+
+          const renamed = path.join(wallpapersDir, `${Date.now()}_wallpaper${ext}`);
+          try {
+            fs.renameSync(targetPath, renamed);
+            finalPath = renamed;
+          } catch (e) {
+            finalPath = targetPath;
           }
         }
 
@@ -1059,37 +1130,6 @@ function openVSThemesWindow() {
       },
     });
 
-    const spawnDownloadWorker = (targetUrl) => {
-      modLog("[Spawning background download worker for gateway]:", targetUrl);
-      const worker = new BrowserWindow({
-        show: false,
-        width: 800,
-        height: 600,
-        webPreferences: {
-          nodeIntegration: false,
-          contextIsolation: true,
-        },
-      });
-
-      worker.webContents.setWindowOpenHandler((details) => {
-        modLog("[Worker windowOpen]:", details.url);
-        worker.loadURL(details.url);
-        return { action: "deny" };
-      });
-
-      const refererUrl = (vsthemesWindow && !vsthemesWindow.isDestroyed()) ? (vsthemesWindow.webContents.getURL() || "https://vsthemes.org/") : "https://vsthemes.org/";
-      worker.loadURL(targetUrl, {
-        userAgent: (vsthemesWindow && !vsthemesWindow.isDestroyed()) ? vsthemesWindow.webContents.getUserAgent() : undefined,
-        extraHeaders: `Referer: ${refererUrl}\n`,
-      }).catch((e) => {
-        modLog("[download worker load error]:", e);
-      });
-
-      setTimeout(() => {
-        if (!worker.isDestroyed()) worker.destroy();
-      }, 60000);
-    };
-
     // Intercept target="_blank" and window.open
     vsthemesWindow.webContents.setWindowOpenHandler((details) => {
       const targetUrl = details.url;
@@ -1105,18 +1145,9 @@ function openVSThemesWindow() {
         return { action: "deny" };
       }
 
-      // 1. Dynamic download gateways (do=download, /load/, server=, etc.)
-      if (targetUrl.includes("do=download") || targetUrl.includes("/load/") || targetUrl.includes("/dnew/download") || targetUrl.includes("server=")) {
-        spawnDownloadWorker(targetUrl);
-        return { action: "deny" };
-      }
-
-      // 2. Direct static file downloads (.zip, .mp4, etc.)
-      const isDirectFile = targetUrl.match(/\.(zip|rar|7z|mp4|webm|gif)(\?.*)?$/i) ||
-                           targetUrl.includes("/get/");
-
-      if (isDirectFile) {
-        modLog("[Direct file downloadURL]:", targetUrl);
+      // Trigger download for download gateways or media links
+      if (targetUrl.includes("do=download") || targetUrl.includes("/load/") || targetUrl.includes("/dnew/download") || targetUrl.includes("server=") || targetUrl.match(/\.(zip|rar|7z|mp4|webm|gif)(\?.*)?$/i) || targetUrl.includes("/get/")) {
+        modLog("[Triggering downloadURL]:", targetUrl);
         vsthemesWindow.webContents.downloadURL(targetUrl, {
           headers: {
             "Referer": vsthemesWindow.webContents.getURL() || "https://vsthemes.org/",
@@ -1126,7 +1157,7 @@ function openVSThemesWindow() {
         return { action: "deny" };
       }
 
-      // 3. Normal navigation within vsthemes.org (like clicking category or card)
+      // Normal navigation within vsthemes.org
       if (targetUrl.includes("vsthemes.org")) {
         vsthemesWindow.loadURL(targetUrl).catch(() => {});
         return { action: "deny" };
@@ -1138,17 +1169,9 @@ function openVSThemesWindow() {
     // Intercept in-page navigation (links that might directly point to files or download endpoints)
     vsthemesWindow.webContents.on("will-navigate", (event, navUrl) => {
       modLog("[will-navigate]:", navUrl);
-      if (navUrl.includes("do=download") || navUrl.includes("/load/") || navUrl.includes("/dnew/download") || navUrl.includes("server=")) {
+      if (navUrl.includes("do=download") || navUrl.includes("/load/") || navUrl.includes("/dnew/download") || navUrl.includes("server=") || navUrl.match(/\.(zip|rar|7z|mp4|webm|gif)(\?.*)?$/i) || navUrl.includes("/get/")) {
         event.preventDefault();
-        modLog("[Intercepted gateway will-navigate, spawning worker]:", navUrl);
-        spawnDownloadWorker(navUrl);
-        return;
-      }
-      const isDirectDownload = navUrl.match(/\.(zip|rar|7z|mp4|webm|gif)(\?.*)?$/i) ||
-                               navUrl.includes("/get/");
-      if (isDirectDownload) {
-        event.preventDefault();
-        modLog("[Intercepted direct download will-navigate]:", navUrl);
+        modLog("[Intercepted will-navigate download]:", navUrl);
         vsthemesWindow.webContents.downloadURL(navUrl, {
           headers: {
             "Referer": vsthemesWindow.webContents.getURL() || "https://vsthemes.org/",
@@ -1158,35 +1181,11 @@ function openVSThemesWindow() {
       }
     });
 
-    // If a popup window is created, monitor its navigation too
-    vsthemesWindow.webContents.on("did-create-window", (childWindow) => {
-      modLog("[Child Window created]");
-      childWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-      childWindow.webContents.on("will-navigate", (event, navUrl) => {
-        modLog("[Child Window will-navigate]:", navUrl);
-        if (navUrl.includes("do=download") || navUrl.includes("/load/") || navUrl.includes("/dnew/download") || navUrl.includes("server=")) {
-          event.preventDefault();
-          spawnDownloadWorker(navUrl);
-          childWindow.close();
-        } else if (navUrl.match(/\.(zip|rar|7z|mp4|webm|gif)(\?.*)?$/i) || navUrl.includes("/get/")) {
-          event.preventDefault();
-          vsthemesWindow.webContents.downloadURL(navUrl, {
-            headers: {
-              "Referer": vsthemesWindow.webContents.getURL() || "https://vsthemes.org/",
-              "User-Agent": vsthemesWindow.webContents.getUserAgent(),
-            }
-          });
-          childWindow.close();
-        }
-      });
-    });
-
     // Inject styles, unlockers and download click feedback
     const injectHelperScript = () => {
       vsthemesWindow.webContents.executeJavaScript(`
         (() => {
           try {
-            // Unlock disabled buttons
             const unlockButtons = () => {
               document.querySelectorAll('.download-disabled, [disabled]').forEach(el => {
                 el.classList.remove('download-disabled');
@@ -1196,7 +1195,6 @@ function openVSThemesWindow() {
             unlockButtons();
             setInterval(unlockButtons, 1000);
 
-            // Hide ad banners
             if (!document.getElementById('ym-vsthemes-custom-style')) {
               const style = document.createElement('style');
               style.id = 'ym-vsthemes-custom-style';
@@ -1233,7 +1231,6 @@ function openVSThemesWindow() {
               document.head.appendChild(style);
             }
 
-            // Toast feedback in window
             window.__showDownloadToast = (msg, isSuccess) => {
               let toast = document.getElementById('ym-vsthemes-toast');
               if (!toast) {
@@ -1251,7 +1248,6 @@ function openVSThemesWindow() {
               }, 4500);
             };
 
-            // Catch user click on download buttons
             if (!window.__ymClickHookInstalled) {
               window.__ymClickHookInstalled = true;
               document.addEventListener('click', (e) => {
@@ -1290,19 +1286,29 @@ function openVSThemesWindow() {
 // SETUP IPC HANDLERS
 // ==========================================
 function setupIpcHandlers() {
-  // Prevent any official update installation from quitting and executing updater
+  ipcMain.handle("yandexMusicMod.getMediaServerPort", () => {
+    return mediaServerPort;
+  });
+
+  ipcMain.handle("yandexMusicMod.getMediaUrl", (_ev, filePath) => {
+    if (!filePath) return "";
+    if (filePath.startsWith("http://") || filePath.startsWith("https://") || filePath.startsWith("data:") || filePath.startsWith("blob:")) {
+      return filePath;
+    }
+    return `http://127.0.0.1:${mediaServerPort}/stream?file=${encodeURIComponent(filePath)}`;
+  });
+
   try {
     ipcMain.removeAllListeners("desktop:application:install-update");
     ipcMain.on("desktop:application:install-update", () => {
       console.warn("[Mod Main] Blocked official update installation request.");
     });
   } catch (e) {}
-  // VSThemes In-App Catalog
+
   ipcMain.on("yandexMusicMod.openVSThemes", () => {
     openVSThemesWindow();
   });
 
-  // Local File Selector Dialog for Wallpapers - automatically copies to wallpapers folder
   ipcMain.handle("yandexMusicMod.selectWallpaperFile", async () => {
     const result = await dialog.showOpenDialog({
       title: "Выберите живые обои (MP4, WebM, GIF, JPG, PNG)",
@@ -1331,7 +1337,6 @@ function setupIpcHandlers() {
     }
   });
 
-  // Import Wallpaper File (for drag & drop)
   ipcMain.handle("yandexMusicMod.importWallpaperFile", async (_ev, srcPath) => {
     if (!srcPath || !fs.existsSync(srcPath)) return null;
     const wallpapersDir = path.join(appFolder, "wallpapers");
@@ -1348,7 +1353,6 @@ function setupIpcHandlers() {
     }
   });
 
-  // Delete downloaded wallpaper
   ipcMain.handle("yandexMusicMod.deleteDownloadedWallpaper", async (_ev, filePath) => {
     try {
       if (filePath && fs.existsSync(filePath)) {

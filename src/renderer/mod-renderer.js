@@ -3700,6 +3700,31 @@ const BUILTIN_SYNCED_LYRICS = {
   // ==========================================
   let liveWallpaperAnimFrame = null;
 
+  let cachedMediaServerPort = 0;
+  if (window.yandexMusicMod && window.yandexMusicMod.getMediaServerPort) {
+    window.yandexMusicMod.getMediaServerPort().then((p) => {
+      cachedMediaServerPort = p;
+      window.__ymMediaServerPort = p;
+      if (modSettings["wallpaper/enabled"]) {
+        applyLiveWallpaperSettings();
+      }
+      renderWallpaperGrid();
+    });
+  }
+
+  function toMediaUrl(filePath) {
+    if (!filePath) return "";
+    if (filePath.startsWith("http://") || filePath.startsWith("https://") || filePath.startsWith("data:") || filePath.startsWith("blob:")) {
+      return filePath;
+    }
+    const port = cachedMediaServerPort || window.__ymMediaServerPort;
+    if (port) {
+      return `http://127.0.0.1:${port}/stream?file=${encodeURIComponent(filePath)}`;
+    }
+    return `ym-media://${encodeURIComponent(filePath)}`;
+  }
+
+
   function initLiveWallpaper() {
     if (document.getElementById("ym-live-wallpaper-container")) return;
 
@@ -3859,7 +3884,7 @@ const BUILTIN_SYNCED_LYRICS = {
       if (cvs) cvs.style.display = "none";
       if (img) {
         img.style.display = "block";
-        if (img.src !== activeUrl) img.src = activeUrl;
+        const imgUrl = toMediaUrl(activeUrl); if (img.src !== imgUrl) img.src = imgUrl;
       }
     } else {
       // Video
@@ -3885,10 +3910,7 @@ const BUILTIN_SYNCED_LYRICS = {
             startCanvasWallpaper(cvs, "starfield");
           }
         };
-        let streamUrl = activeUrl;
-        if (streamUrl && !streamUrl.startsWith("http://") && !streamUrl.startsWith("https://") && !streamUrl.startsWith("ym-media://") && !streamUrl.startsWith("blob:") && !streamUrl.startsWith("data:")) {
-          streamUrl = `ym-media://${encodeURIComponent(streamUrl)}`;
-        }
+        let streamUrl = toMediaUrl(activeUrl);
         if (vid.src !== streamUrl) {
           vid.src = streamUrl;
           vid.load();
@@ -4057,8 +4079,8 @@ const BUILTIN_SYNCED_LYRICS = {
       card.innerHTML = `
         <div class="ym-wallpaper-preview">
           ${isVideo 
-            ? `<video src="ym-media://${encodeURIComponent(item.path)}" loop muted playsinline preload="metadata" onmouseenter="try{this.play()}catch(e){}" onmouseleave="try{this.pause()}catch(e){}"></video>` 
-            : `<img src="ym-media://${encodeURIComponent(item.path)}" alt="" />`
+            ? `<video src="${toMediaUrl(item.path)}" loop muted playsinline preload="metadata" onmouseenter="try{this.play()}catch(e){}" onmouseleave="try{this.pause()}catch(e){}"></video>` 
+            : `<img src="${toMediaUrl(item.path)}" alt="" />`
           }
           <span class="ym-wallpaper-badge" style="background:rgba(139,92,246,0.35);color:#e9d5ff;">${isVideo ? "MP4 Видео" : "Анимация"}</span>
           <button class="ym-wp-del-btn" title="Удалить эти обои с диска" type="button">
