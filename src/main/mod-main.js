@@ -788,6 +788,30 @@ function startPlayerStatePolling() {
 }
 
 let vsthemesWindow = null;
+
+function setupMediaProtocol() {
+  try {
+    if (protocol && protocol.handle) {
+      protocol.handle("ym-media", (request) => {
+        try {
+          let raw = request.url.replace(/^ym-media:\/\//, "");
+          let filePath = decodeURIComponent(raw);
+          if (filePath.startsWith("/") && filePath.length > 2 && filePath[2] === ":") {
+            filePath = filePath.slice(1);
+          }
+          const fileUrl = pathToFileURL(filePath).toString();
+          return net.fetch(fileUrl);
+        } catch (err) {
+          console.error("[ym-media error]", err);
+          return new Response("Not found", { status: 404 });
+        }
+      });
+    }
+  } catch (err) {
+    console.error("[setupMediaProtocol]", err);
+  }
+}
+
 let downloadListenerAttached = false;
 
 async function extractWallpaperZip(zipPath, wallpapersDir) {
@@ -914,6 +938,8 @@ function ensureWallpaperDownloadListener() {
 
 function openVSThemesWindow() {
   if (vsthemesWindow && !vsthemesWindow.isDestroyed()) {
+    if (vsthemesWindow.isMinimized()) vsthemesWindow.restore();
+    vsthemesWindow.show();
     vsthemesWindow.focus();
     return;
   }

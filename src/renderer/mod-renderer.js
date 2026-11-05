@@ -6095,7 +6095,7 @@ const BUILTIN_SYNCED_LYRICS = {
 
       if (btnRefreshWp) {
         btnRefreshWp.addEventListener("click", () => {
-          renderWallpaperGrid(currentWallpaperFilter);
+          renderWallpaperGrid();
         });
       }
 
