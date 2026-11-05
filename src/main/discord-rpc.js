@@ -1,7 +1,7 @@
 const net = require("net");
 const process = require("process");
 
-const CLIENT_ID = "1269826362399522849";
+const CLIENT_ID = "1283109459463377011";
 
 class DiscordRPC {
   constructor(clientId = CLIENT_ID) {
@@ -196,12 +196,7 @@ class DiscordRPC {
             this.sendActivityPayload(this.lastActivity);
           }
         } else if (data.evt === "ERROR" || (data.cmd === "SET_ACTIVITY" && data.data && data.data.code)) {
-          if (this.lastActivity && this.lastActivity.type === 2) {
-            console.warn("[Discord RPC] Activity type 2 rejected by Discord, falling back to type 0:", data);
-            const fallbackAct = Object.assign({}, this.lastActivity, { type: 0 });
-            this.lastActivity = fallbackAct;
-            this.sendActivityPayload(fallbackAct);
-          }
+          console.warn("[Discord RPC] Activity response code:", data.data ? data.data.code : data.evt);
         }
       } catch (e) {}
     }

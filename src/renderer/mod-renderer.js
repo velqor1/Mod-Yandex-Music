@@ -2365,11 +2365,28 @@ const BUILTIN_SYNCED_LYRICS = {
           <span class="ym-am-time ym-am-time-right" id="ym-am-time-rem">-0:00</span>
         </div>
         <div class="ym-am-buttons-row">
-          <button class="ym-am-btn" id="ym-am-btn-vol" title="Громкость">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+          <div class="ym-am-volume-wrap" style="position:relative;">
+            <button class="ym-am-btn" id="ym-am-btn-vol" title="Громкость">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+            </button>
+            <div class="ym-am-volume-popup" id="ym-am-volume-popup" style="display:none;">
+              <div class="ym-am-volume-slider-wrap" id="ym-am-volume-slider-wrap">
+                <div class="ym-am-volume-fill" id="ym-am-volume-fill"></div>
+                <div class="ym-am-volume-thumb" id="ym-am-volume-thumb"></div>
+              </div>
+              <div class="ym-am-volume-text" id="ym-am-volume-text">100%</div>
+            </div>
+          </div>
+          <button class="ym-am-btn ym-am-btn-like" id="ym-am-btn-like" title="Нравится">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+            </svg>
           </button>
-          <button class="ym-am-btn" id="ym-am-btn-more" title="Параметры">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+          <button class="ym-am-btn ym-am-btn-dislike" id="ym-am-btn-dislike" title="Не нравится">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+              <line x1="2" y1="2" x2="22" y2="22" stroke="#ef4444" stroke-width="2.5" />
+            </svg>
           </button>
           <button class="ym-am-btn" id="ym-am-btn-prev" title="Предыдущий трек">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
@@ -2449,10 +2466,104 @@ const BUILTIN_SYNCED_LYRICS = {
     document.getElementById("ym-am-btn-play")?.addEventListener("click", () => handlePlayerAction("playPause"));
     document.getElementById("ym-am-btn-prev")?.addEventListener("click", () => handlePlayerAction("prev"));
     document.getElementById("ym-am-btn-next")?.addEventListener("click", () => handlePlayerAction("next"));
-    document.getElementById("ym-am-btn-vol")?.addEventListener("click", () => {
-      const volBtn = document.querySelector('button[data-test-id*="VOLUME"], [data-test-id="VOLUME_BUTTON"]');
-      if (volBtn) volBtn.click();
+
+    // Volume popup & smooth vertical dragging
+    const volBtn = document.getElementById("ym-am-btn-vol");
+    const volPopup = document.getElementById("ym-am-volume-popup");
+    const volWrap = document.getElementById("ym-am-volume-slider-wrap");
+    const volFill = document.getElementById("ym-am-volume-fill");
+    const volThumb = document.getElementById("ym-am-volume-thumb");
+    const volText = document.getElementById("ym-am-volume-text");
+
+    let isDraggingVol = false;
+
+    const updateVolUI = (vol01) => {
+      const v = Math.max(0, Math.min(1, vol01));
+      const pct = Math.round(v * 100);
+      if (volFill) volFill.style.height = `${pct}%`;
+      if (volThumb) volThumb.style.bottom = `${pct}%`;
+      if (volText) volText.textContent = `${pct}%`;
+    };
+
+    let curV = typeof window.__ymCurrentVolume === "number" ? window.__ymCurrentVolume : 1;
+    updateVolUI(curV);
+
+    if (volBtn && volPopup) {
+      volBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const isHidden = volPopup.style.display === "none";
+        volPopup.style.display = isHidden ? "flex" : "none";
+        if (isHidden) {
+          const v = typeof window.__ymCurrentVolume === "number" ? window.__ymCurrentVolume : 1;
+          updateVolUI(v);
+        }
+      });
+    }
+
+    const setVolumeFromMouseY = (clientY) => {
+      if (!volWrap) return;
+      const rect = volWrap.getBoundingClientRect();
+      const bottom = rect.bottom;
+      const height = rect.height;
+      const diff = bottom - clientY;
+      const ratio = Math.max(0, Math.min(1, diff / height));
+      updateVolUI(ratio);
+      window.__ymCurrentVolume = ratio;
+      try { localStorage.setItem("ym_mod_volume", String(ratio)); } catch (e) {}
+
+      const audio = getActiveAudioElement();
+      if (audio) {
+        audio.volume = ratio;
+      }
+      handlePlayerAction("setVolume", { volume: ratio });
+    };
+
+    if (volWrap) {
+      volWrap.addEventListener("mousedown", (e) => {
+        isDraggingVol = true;
+        setVolumeFromMouseY(e.clientY);
+      });
+    }
+
+    window.addEventListener("mousemove", (e) => {
+      if (isDraggingVol) {
+        setVolumeFromMouseY(e.clientY);
+      }
     });
+
+    window.addEventListener("mouseup", () => {
+      isDraggingVol = false;
+    });
+
+    document.addEventListener("click", (e) => {
+      if (volPopup && volPopup.style.display !== "none") {
+        if (!volPopup.contains(e.target) && e.target !== volBtn && !volBtn?.contains(e.target)) {
+          volPopup.style.display = "none";
+        }
+      }
+    });
+
+    // Like button
+    const likeBtn = document.getElementById("ym-am-btn-like");
+    if (likeBtn) {
+      likeBtn.addEventListener("click", () => {
+        const actualLike = document.querySelector('button[data-test-id="LIKE_BUTTON"], [data-test-id="PLAYERBAR_LIKE_BUTTON"]');
+        if (actualLike) actualLike.click();
+        else handlePlayerAction("like");
+        setTimeout(syncLikeStatusUI, 120);
+      });
+    }
+
+    // Dislike button
+    const dislikeBtn = document.getElementById("ym-am-btn-dislike");
+    if (dislikeBtn) {
+      dislikeBtn.addEventListener("click", () => {
+        const actualDislike = document.querySelector('button[data-test-id="DISLIKE_BUTTON"], [data-test-id="PLAYERBAR_DISLIKE_BUTTON"]');
+        if (actualDislike) actualDislike.click();
+        else handlePlayerAction("dislike");
+      });
+    }
+
     document.getElementById("ym-am-btn-queue")?.addEventListener("click", () => {
       const qBtn = document.querySelector('button[data-test-id="PLAYERBAR_DESKTOP_PLAY_QUEUE_BUTTON"], button[data-test-id="QUEUE_BUTTON"]');
       if (qBtn) qBtn.click();
@@ -2475,6 +2586,8 @@ const BUILTIN_SYNCED_LYRICS = {
 
     // Attach direct audio listener for 60fps lyrics sync
     hookDirectAudioElement();
+    startFullscreenLyricsProgressLoop();
+    syncLikeStatusUI();
   }
 
   
@@ -2484,6 +2597,40 @@ const BUILTIN_SYNCED_LYRICS = {
       if (a) return a;
     }
     return document.querySelector("audio") || null;
+  }
+
+  function syncLikeStatusUI() {
+    const likeBtn = document.getElementById("ym-am-btn-like");
+    if (!likeBtn) return;
+    const actualLike = document.querySelector('button[data-test-id="LIKE_BUTTON"], [data-test-id="PLAYERBAR_LIKE_BUTTON"]');
+    let isLiked = false;
+    if (actualLike) {
+      isLiked = actualLike.getAttribute("aria-pressed") === "true" ||
+                actualLike.className.includes("active") ||
+                actualLike.className.includes("Like_active") ||
+                !!actualLike.querySelector('svg[fill="#ef4444"], svg[fill="#fc3f1d"], svg[fill="red"]');
+    } else if (window.__lastPlayerState && window.__lastPlayerState.track) {
+      isLiked = !!window.__lastPlayerState.track.isLiked;
+    }
+    likeBtn.classList.toggle("active", !!isLiked);
+  }
+
+  let fsLyricsProgressTimer = null;
+  function startFullscreenLyricsProgressLoop() {
+    if (fsLyricsProgressTimer) clearInterval(fsLyricsProgressTimer);
+    fsLyricsProgressTimer = setInterval(() => {
+      if (!fsLyricsVisible) {
+        clearInterval(fsLyricsProgressTimer);
+        fsLyricsProgressTimer = null;
+        return;
+      }
+      const audio = getActiveAudioElement();
+      if (audio && audio.duration) {
+        updateAppleMusicProgress(audio.currentTime, audio.duration, !audio.paused);
+        updateFullscreenLyricsActiveLine(audio.currentTime);
+      }
+      syncLikeStatusUI();
+    }, 100);
   }
 
   function seekAudioTo(targetSeconds) {
@@ -3551,12 +3698,15 @@ const BUILTIN_SYNCED_LYRICS = {
   // ==========================================
   // 5.6. LIVE WALLPAPER ENGINE & WORKSHOP (Мастерская обоев)
   // ==========================================
-  const WALLPAPER_PRESETS = [
+  let currentWallpaperFilter = "all";
+
+  WALLPAPER_PRESETS = [
     {
       id: "cyberpunk_city",
       title: "Cyberpunk Night City",
       desc: "Неоновый мегаполис будущего, небоскрёбы и ночной дождь",
       type: "video",
+      category: "cyberpunk",
       badge: "Cyberpunk Loop",
       preview: "https://i.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif",
       url: "https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.mp4"
@@ -3566,6 +3716,7 @@ const BUILTIN_SYNCED_LYRICS = {
       title: "Lofi Anime Study",
       desc: "Знаменитая Lofi Girl в наушниках с мягким дождём за окном",
       type: "video",
+      category: "anime",
       badge: "Lofi Girl Loop",
       preview: "https://i.giphy.com/media/3o7TKMt1VVNkHV2PaE/giphy.gif",
       url: "https://media.giphy.com/media/3o7TKMt1VVNkHV2PaE/giphy.mp4"
@@ -3575,6 +3726,7 @@ const BUILTIN_SYNCED_LYRICS = {
       title: "Synthwave Sunset",
       desc: "Ретровейв закат, неоновое солнце и пальмы Майами 80-х",
       type: "video",
+      category: "cyberpunk",
       badge: "80s Retro Loop",
       preview: "https://i.giphy.com/media/26AHG5KGFxSkUWw1i/giphy.gif",
       url: "https://media.giphy.com/media/26AHG5KGFxSkUWw1i/giphy.mp4"
@@ -3584,6 +3736,7 @@ const BUILTIN_SYNCED_LYRICS = {
       title: "Tokyo Neon Streets",
       desc: "Аниме ночной переулок Токио с мерцающими неоновыми вывесками",
       type: "video",
+      category: "anime",
       badge: "Tokyo Loop",
       preview: "https://i.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif",
       url: "https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.mp4"
@@ -3593,6 +3746,7 @@ const BUILTIN_SYNCED_LYRICS = {
       title: "Neon Horizon Grid",
       desc: "Бесконечный неоновый горизонт и футуристичная кибер-сетка",
       type: "video",
+      category: "cyberpunk",
       badge: "Outrun Grid",
       preview: "https://i.giphy.com/media/3o7aCSPqXE5C6T8tBC/giphy.gif",
       url: "https://media.giphy.com/media/3o7aCSPqXE5C6T8tBC/giphy.mp4"
@@ -3602,6 +3756,7 @@ const BUILTIN_SYNCED_LYRICS = {
       title: "Cozy Lofi Rain",
       desc: "Уютная ночная комната, мягкий свет лампы и капли по стеклу",
       type: "video",
+      category: "anime",
       badge: "Rain Loop",
       preview: "https://i.giphy.com/media/13HgwGsXF0aiGY/giphy.gif",
       url: "https://media.giphy.com/media/13HgwGsXF0aiGY/giphy.mp4"
@@ -3611,6 +3766,7 @@ const BUILTIN_SYNCED_LYRICS = {
       title: "Aesthetic Sunset Clouds",
       desc: "Живописные пастельные аниме-облака на закате солнца",
       type: "video",
+      category: "anime",
       badge: "Anime Sky",
       preview: "https://i.giphy.com/media/3o7aD2saalBwwftBIY/giphy.gif",
       url: "https://media.giphy.com/media/3o7aD2saalBwwftBIY/giphy.mp4"
@@ -3620,6 +3776,7 @@ const BUILTIN_SYNCED_LYRICS = {
       title: "Coffee & Vinyl Vibe",
       desc: "Горячий кофе, крутящийся винил и дождливый вечер",
       type: "video",
+      category: "anime",
       badge: "Chill Vibe",
       preview: "https://i.giphy.com/media/3oKIPnAiaMCws8nOsE/giphy.gif",
       url: "https://media.giphy.com/media/3oKIPnAiaMCws8nOsE/giphy.mp4"
@@ -3629,6 +3786,7 @@ const BUILTIN_SYNCED_LYRICS = {
       title: "Anime Starry Galaxy",
       desc: "Падающие звёзды, созвездия и глубокое космическое сияние",
       type: "video",
+      category: "space",
       badge: "Space Loop",
       preview: "https://i.giphy.com/media/d2jjuAZzDSVLZ5kI/giphy.gif",
       url: "https://media.giphy.com/media/d2jjuAZzDSVLZ5kI/giphy.mp4"
@@ -3638,6 +3796,7 @@ const BUILTIN_SYNCED_LYRICS = {
       title: "Matrix Code Rain",
       desc: "Интерактивный зелёный цифровой дождь 60 FPS",
       type: "canvas",
+      category: "canvas",
       badge: "60 FPS Canvas",
       preview: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=400&q=80",
       url: "canvas:matrix"
@@ -3647,16 +3806,18 @@ const BUILTIN_SYNCED_LYRICS = {
       title: "Neon Audio Waves",
       desc: "Градиентные пульсирующие волны света в ритме музыки",
       type: "canvas",
+      category: "canvas",
       badge: "60 FPS Canvas",
       preview: "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=400&q=80",
       url: "canvas:waves"
     },
     {
-      id: "hyperspace",
-      title: "Cosmic Warp 3D",
-      desc: "Плавный трёхмерный полёт сквозь гиперпространство звёзд",
+      id: "starfield",
+      title: "Hyperdrive Warp Stars",
+      desc: "Плавный 3D полёт сквозь гиперпространство и звёздные скопления",
       type: "canvas",
-      badge: "3D Canvas",
+      category: "canvas",
+      badge: "60 FPS Canvas",
       preview: "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?w=400&q=80",
       url: "canvas:starfield"
     }
@@ -3676,6 +3837,52 @@ const BUILTIN_SYNCED_LYRICS = {
       <div id="ym-live-wallpaper-overlay"></div>
     `;
     document.body.prepend(container);
+
+    // Download completed listener from VSThemes window
+    if (window.yandexMusicMod && window.yandexMusicMod.onWallpaperDownloaded) {
+      window.yandexMusicMod.onWallpaperDownloaded((filePath, filename) => {
+        saveSetting("wallpaper/enabled", true);
+        saveSetting("wallpaper/source", filePath);
+        saveSetting("wallpaper/type", /\.(mp4|webm)$/i.test(filePath) ? "video" : "image");
+        saveSetting("wallpaper/url", filePath);
+
+        const enableSwitch = document.getElementById("opt-wallpaper-enable");
+        if (enableSwitch) enableSwitch.checked = true;
+
+        applyLiveWallpaperSettings();
+        showNotification(`Живые обои «${filename}» успешно скачаны и применены!`, "success");
+        renderWallpaperGrid("downloaded");
+      });
+    }
+
+    // Drag and drop video/gif onto app window
+    window.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+
+    window.addEventListener("drop", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        const file = e.dataTransfer.files[0];
+        const fPath = file.path;
+        if (fPath && /\.(mp4|webm|gif|png|jpe?g)$/i.test(fPath)) {
+          const isVid = /\.(mp4|webm)$/i.test(fPath);
+          saveSetting("wallpaper/enabled", true);
+          saveSetting("wallpaper/source", fPath);
+          saveSetting("wallpaper/type", isVid ? "video" : "image");
+          saveSetting("wallpaper/url", fPath);
+
+          const enableSwitch = document.getElementById("opt-wallpaper-enable");
+          if (enableSwitch) enableSwitch.checked = true;
+
+          applyLiveWallpaperSettings();
+          showNotification(`Живые обои установлены: ${file.name}`, "success");
+          renderWallpaperGrid("downloaded");
+        }
+      }
+    });
 
     // Auto-pause listener on blur / minimize for extreme energy & GPU efficiency
     window.addEventListener("blur", () => {
@@ -3778,8 +3985,12 @@ const BUILTIN_SYNCED_LYRICS = {
             startCanvasWallpaper(cvs, "starfield");
           }
         };
-        if (vid.src !== activeUrl) {
-          vid.src = activeUrl;
+        let streamUrl = activeUrl;
+        if (streamUrl && !streamUrl.startsWith("http://") && !streamUrl.startsWith("https://") && !streamUrl.startsWith("ym-media://") && !streamUrl.startsWith("blob:") && !streamUrl.startsWith("data:")) {
+          streamUrl = `ym-media://${encodeURIComponent(streamUrl)}`;
+        }
+        if (vid.src !== streamUrl) {
+          vid.src = streamUrl;
           vid.load();
         }
         vid.play().catch((err) => {
@@ -3909,15 +4120,76 @@ const BUILTIN_SYNCED_LYRICS = {
     }
   }
 
-  function renderWallpaperGrid() {
+  async function renderWallpaperGrid(filter = currentWallpaperFilter) {
     const grid = document.getElementById("ym-wallpaper-grid");
     if (!grid) return;
 
+    currentWallpaperFilter = filter;
     grid.innerHTML = "";
     const activeSource = modSettings["wallpaper/source"] || "synthwave";
     const isWpEnabled = !!modSettings["wallpaper/enabled"];
 
-    WALLPAPER_PRESETS.forEach(preset => {
+    // Update active state on filter buttons
+    document.querySelectorAll(".ym-wp-filter-btn").forEach(btn => {
+      btn.classList.toggle("active", btn.getAttribute("data-filter") === filter);
+    });
+
+    if (filter === "downloaded") {
+      let downloaded = [];
+      try {
+        if (window.yandexMusicMod && window.yandexMusicMod.getDownloadedWallpapers) {
+          downloaded = await window.yandexMusicMod.getDownloadedWallpapers();
+        }
+      } catch (e) {}
+
+      if (!downloaded || downloaded.length === 0) {
+        grid.innerHTML = `
+          <div style="grid-column: 1 / -1; text-align: center; padding: 30px; color: rgba(255,255,255,0.5);">
+            <div style="font-size: 14px; font-weight: 600; margin-bottom: 6px;">Нет скачанных обоев</div>
+            <div style="font-size: 12px;">Откройте каталог VSThemes и нажмите «Скачать» на любых обоях, либо загрузите файл с компьютера.</div>
+          </div>
+        `;
+        return;
+      }
+
+      downloaded.forEach(item => {
+        const isSelected = isWpEnabled && activeSource === item.path;
+        const card = document.createElement("div");
+        card.className = `ym-wallpaper-card ${isSelected ? "active" : ""}`;
+        const isVideo = /\.(mp4|webm)$/i.test(item.filename);
+        card.innerHTML = `
+          <div class="ym-wallpaper-preview" style="background:#16161e; display:flex; align-items:center; justify-content:center;">
+            <span class="ym-wallpaper-badge" style="background:rgba(139,92,246,0.3);color:#e9d5ff;">${isVideo ? "MP4 Видео" : "Анимация"}</span>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="1.5"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg>
+          </div>
+          <div class="ym-wallpaper-title" title="${item.filename}">${item.filename.length > 22 ? item.filename.slice(0, 19) + '...' : item.filename}</div>
+          <div class="ym-wallpaper-desc">Скачано с VSThemes (${Math.round(item.size / 1024 / 1024 * 10) / 10} MB)</div>
+          <button class="ym-btn-action">${isSelected ? "✓ Активно" : "Выбрать"}</button>
+        `;
+
+        card.addEventListener("click", () => {
+          saveSetting("wallpaper/enabled", true);
+          saveSetting("wallpaper/source", item.path);
+          saveSetting("wallpaper/type", isVideo ? "video" : "image");
+          saveSetting("wallpaper/url", item.path);
+
+          const enableSwitch = document.getElementById("opt-wallpaper-enable");
+          if (enableSwitch) enableSwitch.checked = true;
+
+          applyLiveWallpaperSettings();
+          renderWallpaperGrid("downloaded");
+        });
+
+        grid.appendChild(card);
+      });
+      return;
+    }
+
+    const filteredPresets = filter === "all" 
+      ? WALLPAPER_PRESETS 
+      : WALLPAPER_PRESETS.filter(p => p.category === filter);
+
+    filteredPresets.forEach(preset => {
       const card = document.createElement("div");
       card.className = `ym-wallpaper-card ${isWpEnabled && activeSource === preset.id ? "active" : ""}`;
       card.innerHTML = `
@@ -3939,7 +4211,7 @@ const BUILTIN_SYNCED_LYRICS = {
         if (enableSwitch) enableSwitch.checked = true;
 
         applyLiveWallpaperSettings();
-        renderWallpaperGrid();
+        renderWallpaperGrid(currentWallpaperFilter);
       });
 
       grid.appendChild(card);
@@ -4655,6 +4927,30 @@ const BUILTIN_SYNCED_LYRICS = {
 
             <!-- TAB 1.5: WALLPAPER WORKSHOP -->
             <div class="ym-tab-pane" id="tab-wallpapers">
+              <!-- VSThemes In-App Catalog Banner -->
+              <div class="ym-vsthemes-banner">
+                <div class="ym-vsthemes-info">
+                  <div class="ym-vsthemes-title">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    <span>Каталог VSThemes.org</span>
+                    <span class="ym-badge" style="background:rgba(139,92,246,0.3);color:#e9d5ff;border-color:rgba(139,92,246,0.5);">Скачивание в 1 клик</span>
+                  </div>
+                  <div class="ym-vsthemes-desc">
+                    Откройте официальную галерею анимированных обоев VSThemes прямо внутри Яндекс Музыки. При нажатии «Скачать» обои автоматически загрузятся и сразу установятся на фон!
+                  </div>
+                </div>
+                <div class="ym-vsthemes-actions">
+                  <button class="ym-btn-vsthemes" id="btn-open-vsthemes" type="button">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    <span>Открыть каталог</span>
+                  </button>
+                  <button class="ym-btn-upload" id="btn-upload-local-wp" type="button" title="Выбрать видео или GIF файл с компьютера">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <span>С диска</span>
+                  </button>
+                </div>
+              </div>
+
               <div class="ym-card">
                 <div class="ym-card-title">Управление живыми обоями</div>
                 <div class="ym-row">
@@ -4703,9 +4999,19 @@ const BUILTIN_SYNCED_LYRICS = {
                   <div class="ym-card-title">Коллекция живых обоев</div>
                   <button class="ym-btn-action" id="btn-refresh-wallpapers" title="Загрузить обновленный каталог">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                    <span>Обновить каталог</span>
+                    <span>Обновить</span>
                   </button>
                 </div>
+
+                <div class="ym-wp-filters" id="ym-wp-filters">
+                  <button class="ym-wp-filter-btn active" data-filter="all" type="button">Все (12)</button>
+                  <button class="ym-wp-filter-btn" data-filter="cyberpunk" type="button">Cyberpunk & Неон</button>
+                  <button class="ym-wp-filter-btn" data-filter="anime" type="button">Lofi & Anime</button>
+                  <button class="ym-wp-filter-btn" data-filter="space" type="button">Космос & Звёзды</button>
+                  <button class="ym-wp-filter-btn" data-filter="canvas" type="button">60 FPS Шейдеры</button>
+                  <button class="ym-wp-filter-btn" data-filter="downloaded" type="button">📂 Скачанные (VSThemes)</button>
+                </div>
+
                 <div class="ym-wallpaper-grid" id="ym-wallpaper-grid"></div>
               </div>
               <div class="ym-card">
@@ -5908,9 +6214,49 @@ const BUILTIN_SYNCED_LYRICS = {
 
       if (btnRefreshWp) {
         btnRefreshWp.addEventListener("click", () => {
-          renderWallpaperGrid();
+          renderWallpaperGrid(currentWallpaperFilter);
         });
       }
+
+      const btnOpenVSThemes = document.getElementById("btn-open-vsthemes");
+      if (btnOpenVSThemes) {
+        btnOpenVSThemes.addEventListener("click", () => {
+          if (window.yandexMusicMod && window.yandexMusicMod.openVSThemes) {
+            window.yandexMusicMod.openVSThemes();
+          }
+        });
+      }
+
+      const btnUploadLocalWp = document.getElementById("btn-upload-local-wp");
+      if (btnUploadLocalWp) {
+        btnUploadLocalWp.addEventListener("click", async () => {
+          if (window.yandexMusicMod && window.yandexMusicMod.selectWallpaperFile) {
+            const filePath = await window.yandexMusicMod.selectWallpaperFile();
+            if (filePath) {
+              const isVid = /\.(mp4|webm)$/i.test(filePath);
+              saveSetting("wallpaper/enabled", true);
+              saveSetting("wallpaper/source", filePath);
+              saveSetting("wallpaper/type", isVid ? "video" : "image");
+              saveSetting("wallpaper/url", filePath);
+
+              const enableSwitch = document.getElementById("opt-wallpaper-enable");
+              if (enableSwitch) enableSwitch.checked = true;
+
+              applyLiveWallpaperSettings();
+              showNotification(`Живые обои установлены с диска!`, "success");
+              renderWallpaperGrid("downloaded");
+            }
+          }
+        });
+      }
+
+      const filterBtns = document.querySelectorAll(".ym-wp-filter-btn");
+      filterBtns.forEach(btn => {
+        btn.addEventListener("click", () => {
+          const filter = btn.getAttribute("data-filter") || "all";
+          renderWallpaperGrid(filter);
+        });
+      });
 
       renderWallpaperGrid();
     } catch (errWp) {

@@ -99,6 +99,14 @@
         electron.ipcRenderer.on("yandexMusicMod.openSettingsModal", listener);
         return () => electron.ipcRenderer.removeListener("yandexMusicMod.openSettingsModal", listener);
       },
+      openVSThemes: () => electron.ipcRenderer.send("yandexMusicMod.openVSThemes"),
+      selectWallpaperFile: () => electron.ipcRenderer.invoke("yandexMusicMod.selectWallpaperFile"),
+      getDownloadedWallpapers: () => electron.ipcRenderer.invoke("yandexMusicMod.getDownloadedWallpapers"),
+      onWallpaperDownloaded: (callback) => {
+        const listener = (_e, filePath, name) => callback(filePath, name);
+        electron.ipcRenderer.on("yandexMusicMod.wallpaperDownloaded", listener);
+        return () => electron.ipcRenderer.removeListener("yandexMusicMod.wallpaperDownloaded", listener);
+      },
     });
   } catch (e) {
     console.error("[Mod Preload Error]", e);

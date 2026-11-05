@@ -67,10 +67,29 @@ const BUILTIN_SYNCED_LYRICS = {
 };
 
 const electron = require("electron");
-const { app, BrowserWindow, ipcMain, globalShortcut, dialog, shell, screen } = electron;
+const { app, BrowserWindow, ipcMain, globalShortcut, dialog, shell, screen, protocol, net } = electron;
 const path = require("path");
 const fs = require("fs");
 const https = require("https");
+const { pathToFileURL } = require("url");
+
+// Register custom scheme privileges before app ready
+try {
+  if (protocol && protocol.registerSchemesAsPrivileged) {
+    protocol.registerSchemesAsPrivileged([
+      {
+        scheme: "ym-media",
+        privileges: {
+          standard: true,
+          secure: true,
+          supportFetchAPI: true,
+          corsEnabled: true,
+          stream: true
+        }
+      }
+    ]);
+  }
+} catch (e) {}
 const { SettingsManager } = require("./settings");
 const appFolder = app ? app.getPath("userData") : path.join(process.env.APPDATA || "", "YandexMusic");
 const { DiscordRPC } = require("./discord-rpc");
@@ -113,6 +132,13 @@ function initModMain() {
       electronUpdater.autoUpdater.quitAndInstall = () => {};
     }
   } catch (e) {}
+
+  // Register ym-media protocol handler
+  if (app.isReady()) {
+    setupMediaProtocol();
+  } else {
+    app.whenReady().then(setupMediaProtocol);
+  }
 
   // 1. Discord RPC
   function resolveDiscordClientId(appTitle) {
@@ -706,18 +732,20 @@ function updateDiscordActivity(state) {
   };
 
   if (isPlaying) {
-    const startSec = now - Math.floor(position || 0);
+    const nowMs = Date.now();
+    const startMs = Math.round(nowMs - (position || 0) * 1000);
+    const endMs = duration > 0 ? Math.round(startMs + duration * 1000) : null;
+
+    activity.timestamps = {};
     if (timeFormat === "elapsed") {
-      activity.timestamps = { start: startSec };
-    } else if (timeFormat === "remaining" && duration > 0) {
-      activity.timestamps = { end: startSec + Math.floor(duration) };
-    } else if (duration > 0) {
-      activity.timestamps = {
-        start: startSec,
-        end: startSec + Math.floor(duration),
-      };
+      activity.timestamps.start = startMs;
+    } else if (timeFormat === "remaining" && endMs) {
+      activity.timestamps.end = endMs;
+    } else if (endMs) {
+      activity.timestamps.start = startMs;
+      activity.timestamps.end = endMs;
     } else {
-      activity.timestamps = { start: startSec };
+      activity.timestamps.start = startMs;
     }
   }
 
@@ -774,6 +802,80 @@ function startPlayerStatePolling() {
   }, 1500);
 }
 
+let vsthemesWindow = null;
+
+function setupMediaProtocol() {
+  try {
+    if (protocol && protocol.handle) {
+      protocol.handle("ym-media", (request) => {
+        try {
+          let raw = request.url.replace(/^ym-media:\/\//, "");
+          let filePath = decodeURIComponent(raw);
+          if (filePath.startsWith("/") && filePath.length > 2 && filePath[2] === ":") {
+            filePath = filePath.slice(1);
+          }
+          const fileUrl = pathToFileURL(filePath).toString();
+          return net.fetch(fileUrl);
+        } catch (err) {
+          console.error("[ym-media error]", err);
+          return new Response("Not found", { status: 404 });
+        }
+      });
+    }
+  } catch (err) {
+    console.error("[setupMediaProtocol]", err);
+  }
+}
+
+function openVSThemesWindow() {
+  if (vsthemesWindow && !vsthemesWindow.isDestroyed()) {
+    vsthemesWindow.focus();
+    return;
+  }
+
+  vsthemesWindow = new BrowserWindow({
+    width: 1280,
+    height: 860,
+    title: "Каталог живых обоев VSThemes - Yandex Music Mod",
+    backgroundColor: "#0d0e15",
+    autoHideMenuBar: true,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      webSecurity: true,
+    },
+  });
+
+  const wallpapersDir = path.join(appFolder, "wallpapers");
+  try {
+    fs.mkdirSync(wallpapersDir, { recursive: true });
+  } catch (e) {}
+
+  vsthemesWindow.webContents.session.on("will-download", (_event, item) => {
+    const filename = item.getFilename();
+    const cleanName = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const targetPath = path.join(wallpapersDir, `${Date.now()}_${cleanName}`);
+    item.setSavePath(targetPath);
+
+    item.once("done", (_e, state) => {
+      if (state === "completed") {
+        console.log("[VSThemes] Wallpaper downloaded successfully:", targetPath);
+        BrowserWindow.getAllWindows().forEach((win) => {
+          if (!win.isDestroyed() && win !== vsthemesWindow && win !== overlayWindow && win !== karaokeWindow) {
+            win.webContents.send("yandexMusicMod.wallpaperDownloaded", targetPath, filename);
+          }
+        });
+      }
+    });
+  });
+
+  vsthemesWindow.loadURL("https://vsthemes.org/wallpapers/live/");
+
+  vsthemesWindow.on("closed", () => {
+    vsthemesWindow = null;
+  });
+}
+
 // ==========================================
 // SETUP IPC HANDLERS
 // ==========================================
@@ -785,6 +887,52 @@ function setupIpcHandlers() {
       console.warn("[Mod Main] Blocked official update installation request.");
     });
   } catch (e) {}
+  // VSThemes In-App Catalog
+  ipcMain.on("yandexMusicMod.openVSThemes", () => {
+    openVSThemesWindow();
+  });
+
+  // Local File Selector Dialog for Wallpapers
+  ipcMain.handle("yandexMusicMod.selectWallpaperFile", async () => {
+    const result = await dialog.showOpenDialog({
+      title: "Выберите живые обои (MP4, WebM, GIF, JPG, PNG)",
+      filters: [
+        { name: "Видео и анимации", extensions: ["mp4", "webm", "gif"] },
+        { name: "Изображения", extensions: ["jpg", "jpeg", "png", "webp"] },
+        { name: "Все файлы", extensions: ["*"] },
+      ],
+      properties: ["openFile"],
+    });
+    if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+      return null;
+    }
+    return result.filePaths[0];
+  });
+
+  // Get list of downloaded wallpapers
+  ipcMain.handle("yandexMusicMod.getDownloadedWallpapers", async () => {
+    const wallpapersDir = path.join(appFolder, "wallpapers");
+    try {
+      if (!fs.existsSync(wallpapersDir)) return [];
+      const files = fs.readdirSync(wallpapersDir);
+      return files
+        .filter((f) => /\.(mp4|webm|gif|png|jpe?g)$/i.test(f))
+        .map((f) => {
+          const fullPath = path.join(wallpapersDir, f);
+          const stat = fs.statSync(fullPath);
+          return {
+            filename: f,
+            path: fullPath,
+            mtime: stat.mtimeMs,
+            size: stat.size,
+          };
+        })
+        .sort((a, b) => b.mtime - a.mtime);
+    } catch (e) {
+      return [];
+    }
+  });
+
   // Storage API
   ipcMain.handle("yandexMusicMod.getStorageValue", (_ev, key) => {
     return settingsManager.get(key);
