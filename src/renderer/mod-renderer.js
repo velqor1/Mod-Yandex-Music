@@ -3698,131 +3698,6 @@ const BUILTIN_SYNCED_LYRICS = {
   // ==========================================
   // 5.6. LIVE WALLPAPER ENGINE & WORKSHOP (Мастерская обоев)
   // ==========================================
-  let currentWallpaperFilter = "all";
-
-  WALLPAPER_PRESETS = [
-    {
-      id: "cyberpunk_city",
-      title: "Cyberpunk Night City",
-      desc: "Неоновый мегаполис будущего, небоскрёбы и ночной дождь",
-      type: "video",
-      category: "cyberpunk",
-      badge: "Cyberpunk Loop",
-      preview: "https://i.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif",
-      url: "https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.mp4"
-    },
-    {
-      id: "lofi_girl",
-      title: "Lofi Anime Study",
-      desc: "Знаменитая Lofi Girl в наушниках с мягким дождём за окном",
-      type: "video",
-      category: "anime",
-      badge: "Lofi Girl Loop",
-      preview: "https://i.giphy.com/media/3o7TKMt1VVNkHV2PaE/giphy.gif",
-      url: "https://media.giphy.com/media/3o7TKMt1VVNkHV2PaE/giphy.mp4"
-    },
-    {
-      id: "synthwave",
-      title: "Synthwave Sunset",
-      desc: "Ретровейв закат, неоновое солнце и пальмы Майами 80-х",
-      type: "video",
-      category: "cyberpunk",
-      badge: "80s Retro Loop",
-      preview: "https://i.giphy.com/media/26AHG5KGFxSkUWw1i/giphy.gif",
-      url: "https://media.giphy.com/media/26AHG5KGFxSkUWw1i/giphy.mp4"
-    },
-    {
-      id: "anime_neon",
-      title: "Tokyo Neon Streets",
-      desc: "Аниме ночной переулок Токио с мерцающими неоновыми вывесками",
-      type: "video",
-      category: "anime",
-      badge: "Tokyo Loop",
-      preview: "https://i.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif",
-      url: "https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.mp4"
-    },
-    {
-      id: "retrowave_grid",
-      title: "Neon Horizon Grid",
-      desc: "Бесконечный неоновый горизонт и футуристичная кибер-сетка",
-      type: "video",
-      category: "cyberpunk",
-      badge: "Outrun Grid",
-      preview: "https://i.giphy.com/media/3o7aCSPqXE5C6T8tBC/giphy.gif",
-      url: "https://media.giphy.com/media/3o7aCSPqXE5C6T8tBC/giphy.mp4"
-    },
-    {
-      id: "lofi_rain",
-      title: "Cozy Lofi Rain",
-      desc: "Уютная ночная комната, мягкий свет лампы и капли по стеклу",
-      type: "video",
-      category: "anime",
-      badge: "Rain Loop",
-      preview: "https://i.giphy.com/media/13HgwGsXF0aiGY/giphy.gif",
-      url: "https://media.giphy.com/media/13HgwGsXF0aiGY/giphy.mp4"
-    },
-    {
-      id: "anime_clouds",
-      title: "Aesthetic Sunset Clouds",
-      desc: "Живописные пастельные аниме-облака на закате солнца",
-      type: "video",
-      category: "anime",
-      badge: "Anime Sky",
-      preview: "https://i.giphy.com/media/3o7aD2saalBwwftBIY/giphy.gif",
-      url: "https://media.giphy.com/media/3o7aD2saalBwwftBIY/giphy.mp4"
-    },
-    {
-      id: "coffee_vinyl",
-      title: "Coffee & Vinyl Vibe",
-      desc: "Горячий кофе, крутящийся винил и дождливый вечер",
-      type: "video",
-      category: "anime",
-      badge: "Chill Vibe",
-      preview: "https://i.giphy.com/media/3oKIPnAiaMCws8nOsE/giphy.gif",
-      url: "https://media.giphy.com/media/3oKIPnAiaMCws8nOsE/giphy.mp4"
-    },
-    {
-      id: "starry_galaxy",
-      title: "Anime Starry Galaxy",
-      desc: "Падающие звёзды, созвездия и глубокое космическое сияние",
-      type: "video",
-      category: "space",
-      badge: "Space Loop",
-      preview: "https://i.giphy.com/media/d2jjuAZzDSVLZ5kI/giphy.gif",
-      url: "https://media.giphy.com/media/d2jjuAZzDSVLZ5kI/giphy.mp4"
-    },
-    {
-      id: "matrix",
-      title: "Matrix Code Rain",
-      desc: "Интерактивный зелёный цифровой дождь 60 FPS",
-      type: "canvas",
-      category: "canvas",
-      badge: "60 FPS Canvas",
-      preview: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=400&q=80",
-      url: "canvas:matrix"
-    },
-    {
-      id: "waves",
-      title: "Neon Audio Waves",
-      desc: "Градиентные пульсирующие волны света в ритме музыки",
-      type: "canvas",
-      category: "canvas",
-      badge: "60 FPS Canvas",
-      preview: "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=400&q=80",
-      url: "canvas:waves"
-    },
-    {
-      id: "starfield",
-      title: "Hyperdrive Warp Stars",
-      desc: "Плавный 3D полёт сквозь гиперпространство и звёздные скопления",
-      type: "canvas",
-      category: "canvas",
-      badge: "60 FPS Canvas",
-      preview: "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?w=400&q=80",
-      url: "canvas:starfield"
-    }
-  ];
-
   let liveWallpaperAnimFrame = null;
 
   function initLiveWallpaper() {
@@ -3838,7 +3713,23 @@ const BUILTIN_SYNCED_LYRICS = {
     `;
     document.body.appendChild(container);
 
-    // Download completed listener from VSThemes window
+    // Download listeners from VSThemes window
+    if (window.yandexMusicMod && window.yandexMusicMod.onWallpaperDownloadStarted) {
+      window.yandexMusicMod.onWallpaperDownloadStarted((filename) => {
+        showNotification(`Загрузка обоев «${filename}» началась...`, "info");
+      });
+    }
+
+    if (window.yandexMusicMod && window.yandexMusicMod.onWallpaperDownloadProgress) {
+      let lastNotifiedProgress = 0;
+      window.yandexMusicMod.onWallpaperDownloadProgress((data) => {
+        if (data && data.percent && data.percent - lastNotifiedProgress >= 35) {
+          lastNotifiedProgress = data.percent;
+          showNotification(`Скачивание обоев: ${data.percent}%`, "info");
+        }
+      });
+    }
+
     if (window.yandexMusicMod && window.yandexMusicMod.onWallpaperDownloaded) {
       window.yandexMusicMod.onWallpaperDownloaded((filePath, filename) => {
         saveSetting("wallpaper/enabled", true);
@@ -3851,7 +3742,7 @@ const BUILTIN_SYNCED_LYRICS = {
 
         applyLiveWallpaperSettings();
         showNotification(`Живые обои «${filename}» успешно скачаны и применены!`, "success");
-        renderWallpaperGrid("downloaded");
+        renderWallpaperGrid();
       });
     }
 
@@ -4129,99 +4020,87 @@ const BUILTIN_SYNCED_LYRICS = {
     }
   }
 
-  async function renderWallpaperGrid(filter = currentWallpaperFilter) {
+  async function renderWallpaperGrid() {
     const grid = document.getElementById("ym-wallpaper-grid");
     if (!grid) return;
 
-    currentWallpaperFilter = filter;
     grid.innerHTML = "";
-    const activeSource = modSettings["wallpaper/source"] || "synthwave";
+    const activeUrl = modSettings["wallpaper/url"] || "";
     const isWpEnabled = !!modSettings["wallpaper/enabled"];
 
-    // Update active state on filter buttons
-    document.querySelectorAll(".ym-wp-filter-btn").forEach(btn => {
-      btn.classList.toggle("active", btn.getAttribute("data-filter") === filter);
-    });
-
-    if (filter === "downloaded") {
-      let downloaded = [];
-      try {
-        if (window.yandexMusicMod && window.yandexMusicMod.getDownloadedWallpapers) {
-          downloaded = await window.yandexMusicMod.getDownloadedWallpapers();
-        }
-      } catch (e) {}
-
-      if (!downloaded || downloaded.length === 0) {
-        grid.innerHTML = `
-          <div style="grid-column: 1 / -1; text-align: center; padding: 30px; color: rgba(255,255,255,0.5);">
-            <div style="font-size: 14px; font-weight: 600; margin-bottom: 6px;">Нет скачанных обоев</div>
-            <div style="font-size: 12px;">Откройте каталог VSThemes и нажмите «Скачать» на любых обоях, либо загрузите файл с компьютера.</div>
-          </div>
-        `;
-        return;
+    let downloaded = [];
+    try {
+      if (window.yandexMusicMod && window.yandexMusicMod.getDownloadedWallpapers) {
+        downloaded = await window.yandexMusicMod.getDownloadedWallpapers();
       }
+    } catch (e) {}
 
-      downloaded.forEach(item => {
-        const isSelected = isWpEnabled && activeSource === item.path;
-        const card = document.createElement("div");
-        card.className = `ym-wallpaper-card ${isSelected ? "active" : ""}`;
-        const isVideo = /\.(mp4|webm)$/i.test(item.filename);
-        card.innerHTML = `
-          <div class="ym-wallpaper-preview" style="background:#16161e; display:flex; align-items:center; justify-content:center;">
-            <span class="ym-wallpaper-badge" style="background:rgba(139,92,246,0.3);color:#e9d5ff;">${isVideo ? "MP4 Видео" : "Анимация"}</span>
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="1.5"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg>
-          </div>
-          <div class="ym-wallpaper-title" title="${item.filename}">${item.filename.length > 22 ? item.filename.slice(0, 19) + '...' : item.filename}</div>
-          <div class="ym-wallpaper-desc">Скачано с VSThemes (${Math.round(item.size / 1024 / 1024 * 10) / 10} MB)</div>
-          <button class="ym-btn-action">${isSelected ? "✓ Активно" : "Выбрать"}</button>
-        `;
-
-        card.addEventListener("click", () => {
-          saveSetting("wallpaper/enabled", true);
-          saveSetting("wallpaper/source", item.path);
-          saveSetting("wallpaper/type", isVideo ? "video" : "image");
-          saveSetting("wallpaper/url", item.path);
-
-          const enableSwitch = document.getElementById("opt-wallpaper-enable");
-          if (enableSwitch) enableSwitch.checked = true;
-
-          applyLiveWallpaperSettings();
-          renderWallpaperGrid("downloaded");
-        });
-
-        grid.appendChild(card);
-      });
+    if (!downloaded || downloaded.length === 0) {
+      grid.innerHTML = `
+        <div class="ym-wp-empty-state">
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          <div class="ym-wp-empty-title">У вас пока нет скачанных обоев</div>
+          <div class="ym-wp-empty-desc">Откройте <b>«Каталог VSThemes.org»</b> выше и нажмите «Скачать» на любых понравившихся обоях, либо нажмите <b>«С диска»</b> или перетащите видеофайл прямо в окно Яндекс Музыки!</div>
+        </div>
+      `;
       return;
     }
 
-    const filteredPresets = filter === "all" 
-      ? WALLPAPER_PRESETS 
-      : WALLPAPER_PRESETS.filter(p => p.category === filter);
-
-    filteredPresets.forEach(preset => {
+    downloaded.forEach((item) => {
+      const isSelected = isWpEnabled && activeUrl === item.path;
       const card = document.createElement("div");
-      card.className = `ym-wallpaper-card ${isWpEnabled && activeSource === preset.id ? "active" : ""}`;
+      card.className = `ym-wallpaper-card ${isSelected ? "active" : ""}`;
+      const isVideo = /\.(mp4|webm)$/i.test(item.filename);
+      const cleanName = item.filename.replace(/^(\d+_)/, "").replace(/[\-_]/g, " ");
+      const sizeMb = (item.size / (1024 * 1024)).toFixed(1);
+
       card.innerHTML = `
-        <div class="ym-wallpaper-preview" style="background-image: url('${preset.preview}');">
-          <span class="ym-wallpaper-badge">${preset.badge}</span>
+        <div class="ym-wallpaper-preview">
+          ${isVideo 
+            ? `<video src="ym-media://${encodeURIComponent(item.path)}" loop muted playsinline preload="metadata" onmouseenter="try{this.play()}catch(e){}" onmouseleave="try{this.pause()}catch(e){}"></video>` 
+            : `<img src="ym-media://${encodeURIComponent(item.path)}" alt="" />`
+          }
+          <span class="ym-wallpaper-badge" style="background:rgba(139,92,246,0.35);color:#e9d5ff;">${isVideo ? "MP4 Видео" : "Анимация"}</span>
+          <button class="ym-wp-del-btn" title="Удалить эти обои с диска" type="button">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
         </div>
-        <div class="ym-wallpaper-title">${preset.title}</div>
-        <div class="ym-wallpaper-desc">${preset.desc}</div>
-        <button class="ym-btn-action">${isWpEnabled && activeSource === preset.id ? "✓ Активно" : "Выбрать"}</button>
+        <div class="ym-wallpaper-title" title="${item.filename}">${cleanName}</div>
+        <div class="ym-wallpaper-desc">${sizeMb} MB • Локальные обои</div>
+        <button class="ym-btn-action ${isSelected ? "ym-active" : ""}">${isSelected ? "✓ Активно" : "Выбрать"}</button>
       `;
 
       card.addEventListener("click", () => {
         saveSetting("wallpaper/enabled", true);
-        saveSetting("wallpaper/source", preset.id);
-        saveSetting("wallpaper/type", preset.type);
-        saveSetting("wallpaper/url", preset.url);
+        saveSetting("wallpaper/source", item.path);
+        saveSetting("wallpaper/type", isVideo ? "video" : "image");
+        saveSetting("wallpaper/url", item.path);
 
         const enableSwitch = document.getElementById("opt-wallpaper-enable");
         if (enableSwitch) enableSwitch.checked = true;
 
         applyLiveWallpaperSettings();
-        renderWallpaperGrid(currentWallpaperFilter);
+        renderWallpaperGrid();
       });
+
+      const delBtn = card.querySelector(".ym-wp-del-btn");
+      if (delBtn) {
+        delBtn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          if (confirm(`Удалить обои «${cleanName}» с компьютера?`)) {
+            if (window.yandexMusicMod && window.yandexMusicMod.deleteDownloadedWallpaper) {
+              await window.yandexMusicMod.deleteDownloadedWallpaper(item.path);
+              if (activeUrl === item.path) {
+                saveSetting("wallpaper/enabled", false);
+                saveSetting("wallpaper/url", "");
+                applyLiveWallpaperSettings();
+              }
+              showNotification("Обои удалены", "info");
+              renderWallpaperGrid();
+            }
+          }
+        });
+      }
 
       grid.appendChild(card);
     });
@@ -4936,26 +4815,26 @@ const BUILTIN_SYNCED_LYRICS = {
 
             <!-- TAB 1.5: WALLPAPER WORKSHOP -->
             <div class="ym-tab-pane" id="tab-wallpapers">
-              <!-- VSThemes In-App Catalog Banner -->
+              <!-- VSThemes In-App Catalog Banner (Compact & Non-overflowing) -->
               <div class="ym-vsthemes-banner">
-                <div class="ym-vsthemes-info">
+                <div class="ym-vsthemes-header">
                   <div class="ym-vsthemes-title">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                    <span>Каталог VSThemes.org</span>
+                    <span>Каталог анимированных обоев VSThemes.org</span>
                     <span class="ym-badge" style="background:rgba(139,92,246,0.3);color:#e9d5ff;border-color:rgba(139,92,246,0.5);">Скачивание в 1 клик</span>
                   </div>
                   <div class="ym-vsthemes-desc">
-                    Откройте официальную галерею анимированных обоев VSThemes прямо внутри Яндекс Музыки. При нажатии «Скачать» обои автоматически загрузятся и сразу установятся на фон!
+                    Открывает галерею живых обоев прямо в приложении. Нажмите «Скачать» на любых обоях — мод автоматически загрузит, распакует и установит их на фон!
                   </div>
                 </div>
                 <div class="ym-vsthemes-actions">
                   <button class="ym-btn-vsthemes" id="btn-open-vsthemes" type="button">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                    <span>Открыть каталог</span>
+                    <span>Открыть каталог VSThemes</span>
                   </button>
                   <button class="ym-btn-upload" id="btn-upload-local-wp" type="button" title="Выбрать видео или GIF файл с компьютера">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                    <span>С диска</span>
+                    <span>С диска (MP4 / GIF)</span>
                   </button>
                 </div>
               </div>
@@ -4965,7 +4844,7 @@ const BUILTIN_SYNCED_LYRICS = {
                 <div class="ym-row">
                   <div class="ym-col-info">
                     <span class="ym-label">Включить анимированные обои</span>
-                    <span class="ym-desc">Плавный зацикленный видео-фон или 60fps генеративные шейдеры</span>
+                    <span class="ym-desc">Плавный зацикленный видео-фон поверх интерфейса</span>
                   </div>
                   <label class="ym-switch">
                     <input type="checkbox" id="opt-wallpaper-enable">
@@ -5003,26 +4882,19 @@ const BUILTIN_SYNCED_LYRICS = {
                   </label>
                 </div>
               </div>
+
               <div class="ym-card">
                 <div class="ym-card-header-row">
-                  <div class="ym-card-title">Коллекция живых обоев</div>
-                  <button class="ym-btn-action" id="btn-refresh-wallpapers" title="Загрузить обновленный каталог">
+                  <div class="ym-card-title">Ваши живые обои</div>
+                  <button class="ym-btn-action" id="btn-refresh-wallpapers" title="Обновить список обоев">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
                     <span>Обновить</span>
                   </button>
                 </div>
 
-                <div class="ym-wp-filters" id="ym-wp-filters">
-                  <button class="ym-wp-filter-btn active" data-filter="all" type="button">Все (12)</button>
-                  <button class="ym-wp-filter-btn" data-filter="cyberpunk" type="button">Cyberpunk & Неон</button>
-                  <button class="ym-wp-filter-btn" data-filter="anime" type="button">Lofi & Anime</button>
-                  <button class="ym-wp-filter-btn" data-filter="space" type="button">Космос & Звёзды</button>
-                  <button class="ym-wp-filter-btn" data-filter="canvas" type="button">60 FPS Шейдеры</button>
-                  <button class="ym-wp-filter-btn" data-filter="downloaded" type="button">📂 Скачанные (VSThemes)</button>
-                </div>
-
                 <div class="ym-wallpaper-grid" id="ym-wallpaper-grid"></div>
               </div>
+
               <div class="ym-card">
                 <div class="ym-card-title">Свои обои (URL / Файл)</div>
                 <div class="ym-row ym-row-block">
@@ -6258,14 +6130,6 @@ const BUILTIN_SYNCED_LYRICS = {
           }
         });
       }
-
-      const filterBtns = document.querySelectorAll(".ym-wp-filter-btn");
-      filterBtns.forEach(btn => {
-        btn.addEventListener("click", () => {
-          const filter = btn.getAttribute("data-filter") || "all";
-          renderWallpaperGrid(filter);
-        });
-      });
 
       renderWallpaperGrid();
     } catch (errWp) {

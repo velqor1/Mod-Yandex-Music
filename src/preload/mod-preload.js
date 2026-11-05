@@ -128,6 +128,17 @@
       openVSThemes: () => electron.ipcRenderer.send("yandexMusicMod.openVSThemes"),
       selectWallpaperFile: () => electron.ipcRenderer.invoke("yandexMusicMod.selectWallpaperFile"),
       getDownloadedWallpapers: () => electron.ipcRenderer.invoke("yandexMusicMod.getDownloadedWallpapers"),
+      deleteDownloadedWallpaper: (filePath) => electron.ipcRenderer.invoke("yandexMusicMod.deleteDownloadedWallpaper", filePath),
+      onWallpaperDownloadStarted: (callback) => {
+        const listener = (_e, name) => callback(name);
+        electron.ipcRenderer.on("yandexMusicMod.wallpaperDownloadStarted", listener);
+        return () => electron.ipcRenderer.removeListener("yandexMusicMod.wallpaperDownloadStarted", listener);
+      },
+      onWallpaperDownloadProgress: (callback) => {
+        const listener = (_e, data) => callback(data);
+        electron.ipcRenderer.on("yandexMusicMod.wallpaperDownloadProgress", listener);
+        return () => electron.ipcRenderer.removeListener("yandexMusicMod.wallpaperDownloadProgress", listener);
+      },
       onWallpaperDownloaded: (callback) => {
         const listener = (_e, filePath, name) => callback(filePath, name);
         electron.ipcRenderer.on("yandexMusicMod.wallpaperDownloaded", listener);

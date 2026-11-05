@@ -67,11 +67,12 @@ const BUILTIN_SYNCED_LYRICS = {
 };
 
 const electron = require("electron");
-const { app, BrowserWindow, ipcMain, globalShortcut, dialog, shell, screen, protocol, net } = electron;
+const { app, BrowserWindow, ipcMain, globalShortcut, dialog, shell, screen, protocol, net, session } = electron;
 const path = require("path");
 const fs = require("fs");
 const https = require("https");
 const { pathToFileURL } = require("url");
+const { exec } = require("child_process");
 
 // Protocol ym-media handled dynamically without registerSchemesAsPrivileged
 const { SettingsManager } = require("./settings");
@@ -787,28 +788,128 @@ function startPlayerStatePolling() {
 }
 
 let vsthemesWindow = null;
+let downloadListenerAttached = false;
 
-function setupMediaProtocol() {
+async function extractWallpaperZip(zipPath, wallpapersDir) {
+  const extractDir = path.join(wallpapersDir, `unpacked_${Date.now()}`);
   try {
-    if (protocol && protocol.handle) {
-      protocol.handle("ym-media", (request) => {
-        try {
-          let raw = request.url.replace(/^ym-media:\/\//, "");
-          let filePath = decodeURIComponent(raw);
-          if (filePath.startsWith("/") && filePath.length > 2 && filePath[2] === ":") {
-            filePath = filePath.slice(1);
-          }
-          const fileUrl = pathToFileURL(filePath).toString();
-          return net.fetch(fileUrl);
-        } catch (err) {
-          console.error("[ym-media error]", err);
-          return new Response("Not found", { status: 404 });
-        }
+    fs.mkdirSync(extractDir, { recursive: true });
+  } catch (e) {}
+
+  await new Promise((resolve) => {
+    // Try native Windows tar.exe first (fast, silent)
+    exec(`tar -xf "${zipPath}" -C "${extractDir}"`, (err) => {
+      if (!err) return resolve();
+      // Fallback to powershell Expand-Archive
+      exec(`powershell -NoProfile -Command "Expand-Archive -LiteralPath '${zipPath}' -DestinationPath '${extractDir}' -Force"`, () => {
+        resolve();
       });
-    }
-  } catch (err) {
-    console.error("[setupMediaProtocol]", err);
+    });
+  });
+
+  function findMediaFiles(dir) {
+    let results = [];
+    try {
+      const list = fs.readdirSync(dir);
+      for (const file of list) {
+        const full = path.join(dir, file);
+        const stat = fs.statSync(full);
+        if (stat && stat.isDirectory()) {
+          results = results.concat(findMediaFiles(full));
+        } else if (/\.(mp4|webm|gif|mov|mkv)$/i.test(file)) {
+          results.push({ path: full, size: stat.size, name: file });
+        }
+      }
+    } catch (e) {}
+    return results;
   }
+
+  const media = findMediaFiles(extractDir);
+  if (media.length > 0) {
+    // Largest video file is the main wallpaper loop
+    media.sort((a, b) => b.size - a.size);
+    const chosen = media[0];
+    const finalExt = path.extname(chosen.path);
+    const baseName = path.basename(zipPath, path.extname(zipPath)).replace(/^(\d+_)/, "");
+    const finalTarget = path.join(wallpapersDir, `${Date.now()}_${baseName}${finalExt}`);
+    try {
+      fs.copyFileSync(chosen.path, finalTarget);
+      fs.rmSync(extractDir, { recursive: true, force: true });
+      fs.unlinkSync(zipPath);
+    } catch (e) {}
+    return fs.existsSync(finalTarget) ? finalTarget : chosen.path;
+  }
+
+  return zipPath;
+}
+
+function ensureWallpaperDownloadListener() {
+  if (downloadListenerAttached) return;
+  const sess = session.defaultSession;
+  if (!sess) return;
+  downloadListenerAttached = true;
+
+  sess.on("will-download", (_event, item, webContents) => {
+    const filename = item.getFilename();
+    console.log("[VSThemes Download Started]:", filename, item.getURL());
+
+    const wallpapersDir = path.join(appFolder, "wallpapers");
+    try {
+      fs.mkdirSync(wallpapersDir, { recursive: true });
+    } catch (e) {}
+
+    const cleanName = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const targetPath = path.join(wallpapersDir, `${Date.now()}_${cleanName}`);
+    item.setSavePath(targetPath);
+
+    BrowserWindow.getAllWindows().forEach((win) => {
+      if (!win.isDestroyed() && win !== vsthemesWindow && win !== overlayWindow && win !== karaokeWindow) {
+        try {
+          win.webContents.send("yandexMusicMod.wallpaperDownloadStarted", filename);
+        } catch (e) {}
+      }
+    });
+
+    item.on("updated", (_e, state) => {
+      if (state === "progressing") {
+        const received = item.getReceivedBytes();
+        const total = item.getTotalBytes();
+        const percent = total > 0 ? Math.round((received / total) * 100) : 0;
+        BrowserWindow.getAllWindows().forEach((win) => {
+          if (!win.isDestroyed() && win !== vsthemesWindow && win !== overlayWindow && win !== karaokeWindow) {
+            try {
+              win.webContents.send("yandexMusicMod.wallpaperDownloadProgress", { filename, received, total, percent });
+            } catch (e) {}
+          }
+        });
+      }
+    });
+
+    item.once("done", async (_e, state) => {
+      if (state === "completed") {
+        console.log("[VSThemes Download Finished]:", targetPath);
+        let finalPath = targetPath;
+        if (targetPath.toLowerCase().endsWith(".zip")) {
+          try {
+            finalPath = await extractWallpaperZip(targetPath, wallpapersDir);
+          } catch (err) {
+            console.error("[VSThemes Unpack Error]:", err);
+          }
+        }
+        const finalName = path.basename(finalPath);
+        console.log("[VSThemes Wallpaper Ready]:", finalPath);
+        BrowserWindow.getAllWindows().forEach((win) => {
+          if (!win.isDestroyed() && win !== vsthemesWindow && win !== overlayWindow && win !== karaokeWindow) {
+            try {
+              win.webContents.send("yandexMusicMod.wallpaperDownloaded", finalPath, finalName);
+            } catch (e) {}
+          }
+        });
+      } else {
+        console.warn("[VSThemes Download Cancelled/Failed]:", state);
+      }
+    });
+  });
 }
 
 function openVSThemesWindow() {
@@ -816,6 +917,8 @@ function openVSThemesWindow() {
     vsthemesWindow.focus();
     return;
   }
+
+  ensureWallpaperDownloadListener();
 
   vsthemesWindow = new BrowserWindow({
     width: 1280,
@@ -830,27 +933,50 @@ function openVSThemesWindow() {
     },
   });
 
-  const wallpapersDir = path.join(appFolder, "wallpapers");
-  try {
-    fs.mkdirSync(wallpapersDir, { recursive: true });
-  } catch (e) {}
+  vsthemesWindow.webContents.setUserAgent(
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+  );
 
-  vsthemesWindow.webContents.session.on("will-download", (_event, item) => {
-    const filename = item.getFilename();
-    const cleanName = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const targetPath = path.join(wallpapersDir, `${Date.now()}_${cleanName}`);
-    item.setSavePath(targetPath);
+  // Prevent blank popups and intercept all download and category clicks
+  vsthemesWindow.webContents.setWindowOpenHandler(({ url }) => {
+    console.log("[VSThemes setWindowOpenHandler intercepted]:", url);
+    if (url.match(/\.(zip|rar|7z|mp4|webm|gif)(\?.*)?$/i) || url.includes("download") || url.includes("/load/") || url.includes("/d/")) {
+      vsthemesWindow.webContents.downloadURL(url);
+      return { action: "deny" };
+    }
+    if (url.includes("vsthemes.org")) {
+      vsthemesWindow.loadURL(url);
+      return { action: "deny" };
+    }
+    return { action: "deny" };
+  });
 
-    item.once("done", (_e, state) => {
-      if (state === "completed") {
-        console.log("[VSThemes] Wallpaper downloaded successfully:", targetPath);
-        BrowserWindow.getAllWindows().forEach((win) => {
-          if (!win.isDestroyed() && win !== vsthemesWindow && win !== overlayWindow && win !== karaokeWindow) {
-            win.webContents.send("yandexMusicMod.wallpaperDownloaded", targetPath, filename);
-          }
-        });
-      }
-    });
+  // Inject script to unlock countdowns and keep all navigation within the window
+  vsthemesWindow.webContents.on("did-finish-load", () => {
+    vsthemesWindow.webContents.executeJavaScript(`
+      (() => {
+        try {
+          document.querySelectorAll('.download-disabled, [disabled]').forEach(el => {
+            el.classList.remove('download-disabled');
+            el.removeAttribute('disabled');
+          });
+          document.querySelectorAll('a[target="_blank"]').forEach(a => {
+            a.target = '_self';
+          });
+          const style = document.createElement('style');
+          style.textContent = \`
+            iframe[src*="ads"], div[class*="banner"], div[id*="ad_"] {
+              display: none !important;
+            }
+            .download-disabled {
+              opacity: 1 !important;
+              pointer-events: auto !important;
+            }
+          \`;
+          document.head.appendChild(style);
+        } catch(e) {}
+      })()
+    `).catch(() => {});
   });
 
   vsthemesWindow.loadURL("https://vsthemes.org/wallpapers/live/");
@@ -894,6 +1020,19 @@ function setupIpcHandlers() {
   });
 
   // Get list of downloaded wallpapers
+    // Delete downloaded wallpaper
+  ipcMain.handle("yandexMusicMod.deleteDownloadedWallpaper", async (_ev, filePath) => {
+    try {
+      if (filePath && fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        return true;
+      }
+    } catch (e) {
+      console.error("[Delete wallpaper error]", e);
+    }
+    return false;
+  });
+
   ipcMain.handle("yandexMusicMod.getDownloadedWallpapers", async () => {
     const wallpapersDir = path.join(appFolder, "wallpapers");
     try {
