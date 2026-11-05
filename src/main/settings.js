@@ -76,11 +76,29 @@ const DEFAULT_SETTINGS = {
 
   // Tweaks & Tools
   "discordRPC/enabled": true,
+  "discordRPC/activityType": "listening", // "listening" (Слушает) | "playing" (Играет в)
+  "discordRPC/timeFormat": "progress", // "progress" (01:34 / 02:54) | "elapsed" (прошло) | "remaining" (обратный отсчет)
   "devtools/enabled": true,
   "blockAds/enabled": true,
   "autoQuality/enabled": true,
   "autoLiker/enabled": false,
-  "settings/accountExperimentsOverride": []
+  "settings/accountExperimentsOverride": [],
+
+  // Live Wallpaper & Workshop
+  "wallpaper/enabled": false,
+  "wallpaper/source": "synthwave", // "cyberpunk" | "lofi" | "synthwave" | "nebula" | "matrix" | "waves" | "hyperspace" | "custom"
+  "wallpaper/type": "video", // "video" | "canvas" | "image"
+  "wallpaper/url": "",
+  "wallpaper/opacity": 55, // dimming percentage 0-90%
+  "wallpaper/blur": 0, // backdrop blur in px
+  "wallpaper/pauseOnBlur": true,
+
+  // Custom Neon Top Trackbar (TikTok / Image 3 style)
+  "trackbar/topBarEnabled": true,
+  "trackbar/color": "#ffe600", // Yellow default like in TikTok / Image 3
+  "trackbar/thickness": "3px", // "2px" | "3px" | "5px"
+  "trackbar/glow": true,
+  "trackbar/hideDefaultSlider": false
 };
 
 class SettingsManager {

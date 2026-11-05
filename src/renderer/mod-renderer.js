@@ -3603,6 +3603,22 @@ const BUILTIN_SYNCED_LYRICS = {
 
             </button>
 
+            <button class="ym-tab-btn" data-tab="tab-wallpapers">
+
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+
+                <line x1="8" y1="21" x2="16" y2="21"></line>
+
+                <line x1="12" y1="17" x2="12" y2="21"></line>
+
+              </svg>
+
+              <span>Мастерская обоев</span>
+
+            </button>
+
             <button class="ym-tab-btn" data-tab="tab-cleaner">
 
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -4014,14 +4030,130 @@ const BUILTIN_SYNCED_LYRICS = {
                     <span class="ym-slider"></span>
 
                   </label>
-
+              <div class="ym-card">
+                <div class="ym-card-title">Кастомный трекбар плеера (Стиль TikTok)</div>
+                <div class="ym-row">
+                  <div class="ym-col-info">
+                    <span class="ym-label">Неоновая полоска сверху плеера</span>
+                    <span class="ym-desc">Светящийся прогресс-бар по верхнему краю панели с точкой воспроизведения</span>
+                  </div>
+                  <label class="ym-switch">
+                    <input type="checkbox" id="opt-trackbar-top" checked>
+                    <span class="ym-slider"></span>
+                  </label>
                 </div>
-
+                <div class="ym-row" id="row-trackbar-color">
+                  <div class="ym-col-info">
+                    <span class="ym-label">Цвет неоновой полоски</span>
+                    <span class="ym-desc">Цвет линии и светящейся точки трека</span>
+                  </div>
+                  <div class="ym-palette-wrap" id="trackbar-palette">
+                    <div class="ym-color-swatch active" data-color="#ffe600" style="background:#ffe600;" title="Ярко-желтый (TikTok)"></div>
+                    <div class="ym-color-swatch" data-color="#ff2d55" style="background:#ff2d55;" title="Киберпанк Розовый"></div>
+                    <div class="ym-color-swatch" data-color="#00f0ff" style="background:#00f0ff;" title="Неоновый Бирюзовый"></div>
+                    <div class="ym-color-swatch" data-color="#00ff66" style="background:#00ff66;" title="Токсично-зеленый"></div>
+                    <div class="ym-color-swatch" data-color="#a855f7" style="background:#a855f7;" title="Электрический Фиолетовый"></div>
+                    <div class="ym-color-swatch" data-color="#ffffff" style="background:#ffffff;" title="Минималистичный Белый"></div>
+                    <input type="color" class="ym-color-picker" id="opt-trackbar-custom-color" value="#ffe600" title="Свой цвет">
+                  </div>
+                </div>
+                <div class="ym-row">
+                  <div class="ym-col-info">
+                    <span class="ym-label">Толщина линии</span>
+                    <span class="ym-desc">Высота полоски над плеером</span>
+                  </div>
+                  <select class="ym-select" id="opt-trackbar-thickness">
+                    <option value="2px">Тонкая (2px)</option>
+                    <option value="3px" selected>Стандартная (3px — как на фото)</option>
+                    <option value="5px">Выразительная (5px)</option>
+                  </select>
+                </div>
+                <div class="ym-row">
+                  <div class="ym-col-info">
+                    <span class="ym-label">Скрыть стандартный ползунок плеера</span>
+                    <span class="ym-desc">Оставить только верхний неоновый бар для ультра-чистого вида</span>
+                  </div>
+                  <label class="ym-switch">
+                    <input type="checkbox" id="opt-trackbar-hide-default">
+                    <span class="ym-slider"></span>
+                  </label>
+                </div>
               </div>
-
             </div>
 
-
+            <!-- TAB 1.5: WALLPAPER WORKSHOP -->
+            <div class="ym-tab-pane" id="tab-wallpapers">
+              <div class="ym-card">
+                <div class="ym-card-title">Мастерская живых обоев</div>
+                <div class="ym-row">
+                  <div class="ym-col-info">
+                    <span class="ym-label">Включить живые обои</span>
+                    <span class="ym-desc">Отображать анимированные циклы, видео и шейдеры на фоне приложения</span>
+                  </div>
+                  <label class="ym-switch">
+                    <input type="checkbox" id="opt-wallpaper-enabled">
+                    <span class="ym-slider"></span>
+                  </label>
+                </div>
+                <div class="ym-row">
+                  <div class="ym-col-info">
+                    <span class="ym-label">Затемнение подложки (Dimming)</span>
+                    <span class="ym-desc">Интенсивность затемнения фона для 100% читаемости названий треков</span>
+                  </div>
+                  <div class="ym-range-wrap">
+                    <input type="range" class="ym-range" id="opt-wallpaper-opacity" min="10" max="90" value="55">
+                    <span class="ym-range-val" id="val-wallpaper-opacity">55%</span>
+                  </div>
+                </div>
+                <div class="ym-row">
+                  <div class="ym-col-info">
+                    <span class="ym-label">Размытие фона (Backdrop Blur)</span>
+                    <span class="ym-desc">Мягкое размытие движения для концентрации на музыке</span>
+                  </div>
+                  <div class="ym-range-wrap">
+                    <input type="range" class="ym-range" id="opt-wallpaper-blur" min="0" max="24" value="0">
+                    <span class="ym-range-val" id="val-wallpaper-blur">0px</span>
+                  </div>
+                </div>
+                <div class="ym-row">
+                  <div class="ym-col-info">
+                    <span class="ym-label">Энергосбережение (Пауза при сворачивании)</span>
+                    <span class="ym-desc">Останавливать анимацию и видео, когда окно скрыто, для экономии GPU и батареи</span>
+                  </div>
+                  <label class="ym-switch">
+                    <input type="checkbox" id="opt-wallpaper-pause" checked>
+                    <span class="ym-slider"></span>
+                  </label>
+                </div>
+              </div>
+              <div class="ym-card">
+                <div class="ym-card-header-row">
+                  <div class="ym-card-title">Коллекция живых обоев</div>
+                  <button class="ym-btn-action" id="btn-refresh-wallpapers" title="Загрузить обновленный каталог">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    <span>Обновить каталог</span>
+                  </button>
+                </div>
+                <div class="ym-wallpaper-grid" id="ym-wallpaper-grid"></div>
+              </div>
+              <div class="ym-card">
+                <div class="ym-card-title">Свои обои (URL / Файл)</div>
+                <div class="ym-row ym-row-block">
+                  <span class="ym-desc" style="margin-bottom: 8px;">Вставьте прямую ссылку на видео (.mp4 / .webm) или анимированный GIF / изображение:</span>
+                  <div class="ym-input-group">
+                    <input type="text" class="ym-input" id="opt-wallpaper-custom-url" placeholder="https://example.com/video.mp4 или gif...">
+                    <button class="ym-btn-primary" id="btn-apply-custom-wallpaper">Применить</button>
+                  </div>
+                </div>
+                <div class="ym-row">
+                  <div class="ym-col-info">
+                    <span class="ym-label">Сбросить фон на стандартный</span>
+                    <span class="ym-desc">Возвращает исходный темный фон Яндекс Музыки</span>
+                  </div>
+                  <button class="ym-btn-secondary" id="btn-reset-wallpaper">Сбросить</button>
+                </div>
+              </div>
+            </div>
 
             <!-- TAB 2: CLEANER -->
 
@@ -6515,6 +6647,8 @@ const BUILTIN_SYNCED_LYRICS = {
 
   function observePlayer() {
 
+    ensureTopTrackbar();
+
     // Only one interval runner
 
     if (window.__ymModObserverRunning) return;
@@ -6813,6 +6947,18 @@ const BUILTIN_SYNCED_LYRICS = {
 
     try {
 
+    try {
+      initLiveWallpaper();
+    } catch (e) {
+      console.error("[YandexMusicMod] Error initializing live wallpaper:", e);
+    }
+
+    try {
+      initTopTrackbar();
+    } catch (e) {
+      console.error("[YandexMusicMod] Error initializing top trackbar:", e);
+    }
+
       const accent = modSettings["custom-themes/accent"] || "#007acc";
 
       applyTheme(accent, true);
@@ -6907,6 +7053,8 @@ const BUILTIN_SYNCED_LYRICS = {
 
       injectFloatingBadge();
 
+        ensureTopTrackbar();
+
     } catch (e) {
 
       console.error("[YandexMusicMod] Error injecting Mod buttons:", e);
@@ -6922,6 +7070,8 @@ const BUILTIN_SYNCED_LYRICS = {
         injectSidebarButton();
 
         injectFloatingBadge();
+
+        ensureTopTrackbar();
 
       });
 

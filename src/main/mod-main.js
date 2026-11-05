@@ -132,6 +132,12 @@ function initModMain() {
         if (lastPlayerState) updateDiscordActivity(lastPlayerState);
       }
     }
+    if (key === "discordRPC/activityType" || key === "discordRPC/timeFormat") {
+      if (lastPlayerState) {
+        rpcLastSentState.timestamp = 0;
+        updateDiscordActivity(lastPlayerState);
+      }
+    }
     if (key === "discordRPC/enabled") {
       discordRPC.enabled = !!value;
       if (value) {
@@ -675,7 +681,11 @@ function updateDiscordActivity(state) {
     validCover = "https://music.yandex.ru/favicon.ico";
   }
 
+  const activityTypeSetting = settingsManager ? settingsManager.get("discordRPC/activityType", "listening") : "listening";
+  const timeFormat = settingsManager ? settingsManager.get("discordRPC/timeFormat", "progress") : "progress";
+
   const activity = {
+    type: activityTypeSetting === "playing" ? 0 : 2, // 2 = Listening ("Слушает"), 0 = Playing ("Играет в")
     details: safeTitle,
     state: safeArtist,
     assets: {
@@ -691,11 +701,18 @@ function updateDiscordActivity(state) {
     instance: false,
   };
 
-  if (isPlaying && duration > 0) {
-    activity.timestamps = {
-      start: now - Math.floor(position || 0),
-      end: now - Math.floor(position || 0) + Math.floor(duration),
-    };
+  if (isPlaying) {
+    const startSec = now - Math.floor(position || 0);
+    if (timeFormat === "elapsed") {
+      activity.timestamps = { start: startSec };
+    } else if (duration > 0) {
+      activity.timestamps = {
+        start: startSec,
+        end: startSec + Math.floor(duration),
+      };
+    } else {
+      activity.timestamps = { start: startSec };
+    }
   }
 
   if (trackId && !trackId.includes("-") && trackId !== "0" && String(trackId).match(/^\d+$/)) {
