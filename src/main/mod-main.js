@@ -867,15 +867,25 @@ async function extractWallpaperZip(zipPath, wallpapersDir) {
   return zipPath;
 }
 
+function modLog(...args) {
+  const line = `[${new Date().toISOString()}] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')}\n`;
+  try {
+    const logFile = path.join(appFolder, "vsthemes-debug.log");
+    fs.appendFileSync(logFile, line, "utf8");
+  } catch(e) {}
+  console.log(...args);
+}
+
 function ensureWallpaperDownloadListener() {
   if (downloadListenerAttached) return;
   const sess = session.defaultSession;
   if (!sess) return;
   downloadListenerAttached = true;
 
-  sess.on("will-download", (_event, item, webContents) => {
+  const handleDownload = (_event, item, webContents) => {
     const filename = item.getFilename();
-    console.log("[VSThemes Download Started]:", filename, item.getURL());
+    const downloadUrl = item.getURL();
+    modLog("[will-download started]:", filename, "URL:", downloadUrl);
 
     const wallpapersDir = path.join(appFolder, "wallpapers");
     try {
@@ -887,7 +897,7 @@ function ensureWallpaperDownloadListener() {
     item.setSavePath(targetPath);
 
     BrowserWindow.getAllWindows().forEach((win) => {
-      if (!win.isDestroyed() && win !== vsthemesWindow && win !== overlayWindow && win !== karaokeWindow) {
+      if (!win.isDestroyed() && win !== overlayWindow && win !== karaokeWindow) {
         try {
           win.webContents.send("yandexMusicMod.wallpaperDownloadStarted", filename);
         } catch (e) {}
@@ -900,7 +910,7 @@ function ensureWallpaperDownloadListener() {
         const total = item.getTotalBytes();
         const percent = total > 0 ? Math.round((received / total) * 100) : 0;
         BrowserWindow.getAllWindows().forEach((win) => {
-          if (!win.isDestroyed() && win !== vsthemesWindow && win !== overlayWindow && win !== karaokeWindow) {
+          if (!win.isDestroyed() && win !== overlayWindow && win !== karaokeWindow) {
             try {
               win.webContents.send("yandexMusicMod.wallpaperDownloadProgress", { filename, received, total, percent });
             } catch (e) {}
@@ -910,18 +920,42 @@ function ensureWallpaperDownloadListener() {
     });
 
     item.once("done", async (_e, state) => {
+      modLog("[will-download finished]: state =", state, "target =", targetPath);
       if (state === "completed") {
-        console.log("[VSThemes Download Finished]:", targetPath);
         let finalPath = targetPath;
-        if (targetPath.toLowerCase().endsWith(".zip")) {
+        let isZip = targetPath.toLowerCase().endsWith(".zip");
+        if (!isZip && fs.existsSync(targetPath)) {
+          try {
+            const buf = Buffer.alloc(4);
+            const fd = fs.openSync(targetPath, "r");
+            fs.readSync(fd, buf, 0, 4, 0);
+            fs.closeSync(fd);
+            if (buf[0] === 0x50 && buf[1] === 0x4B && buf[2] === 0x03 && buf[3] === 0x04) {
+              isZip = true;
+            }
+          } catch(e) {}
+        }
+
+        if (isZip) {
           try {
             finalPath = await extractWallpaperZip(targetPath, wallpapersDir);
           } catch (err) {
-            console.error("[VSThemes Unpack Error]:", err);
+            modLog("[VSThemes Unpack Error]:", err);
           }
         }
         const finalName = path.basename(finalPath);
-        console.log("[VSThemes Wallpaper Ready]:", finalPath);
+        modLog("[VSThemes Wallpaper Ready]:", finalPath);
+
+        try {
+          if (vsthemesWindow && !vsthemesWindow.isDestroyed()) {
+            vsthemesWindow.webContents.executeJavaScript(`
+              if (window.__showDownloadToast) {
+                window.__showDownloadToast("Обои успешно скачаны и установлены на фон!", true);
+              }
+            `).catch(() => {});
+          }
+        } catch (e) {}
+
         BrowserWindow.getAllWindows().forEach((win) => {
           if (!win.isDestroyed() && win !== vsthemesWindow && win !== overlayWindow && win !== karaokeWindow) {
             try {
@@ -930,86 +964,221 @@ function ensureWallpaperDownloadListener() {
           }
         });
       } else {
-        console.warn("[VSThemes Download Cancelled/Failed]:", state);
+        modLog("[VSThemes Download Cancelled/Failed]:", state);
       }
     });
-  });
+  };
+
+  sess.on("will-download", handleDownload);
 }
 
 function openVSThemesWindow() {
-  if (vsthemesWindow && !vsthemesWindow.isDestroyed()) {
-    if (vsthemesWindow.isMinimized()) vsthemesWindow.restore();
-    vsthemesWindow.show();
-    vsthemesWindow.focus();
-    return;
+  try {
+    if (vsthemesWindow && !vsthemesWindow.isDestroyed()) {
+      if (vsthemesWindow.isMinimized()) vsthemesWindow.restore();
+      vsthemesWindow.show();
+      vsthemesWindow.focus();
+      return;
+    }
+
+    ensureWallpaperDownloadListener();
+
+    vsthemesWindow = new BrowserWindow({
+      width: 1280,
+      height: 860,
+      title: "Каталог живых обоев VSThemes - Yandex Music Mod",
+      backgroundColor: "#0d0e15",
+      autoHideMenuBar: true,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        webSecurity: true,
+      },
+    });
+
+    // Intercept target="_blank" and window.open
+    vsthemesWindow.webContents.setWindowOpenHandler((details) => {
+      const targetUrl = details.url;
+      modLog("[setWindowOpenHandler intercepted]:", targetUrl);
+
+      if (targetUrl === "about:blank") {
+        return { action: "allow" };
+      }
+
+      // Ad filter
+      if (targetUrl.includes("yandex.ru/ads") || targetUrl.includes("google") || targetUrl.includes("doubleclick") || targetUrl.includes("adriver")) {
+        modLog("[Ad popup blocked]:", targetUrl);
+        return { action: "deny" };
+      }
+
+      // Detect download endpoints / file downloads
+      const isDownload = targetUrl.match(/\.(zip|rar|7z|mp4|webm|gif)(\?.*)?$/i) ||
+                         targetUrl.includes("download") ||
+                         targetUrl.includes("/load/") ||
+                         targetUrl.includes("/get/") ||
+                         targetUrl.includes("server=") ||
+                         targetUrl.includes("/dnew/download");
+
+      if (isDownload) {
+        modLog("[setWindowOpenHandler triggering downloadURL]:", targetUrl);
+        vsthemesWindow.webContents.downloadURL(targetUrl, {
+          headers: {
+            "Referer": vsthemesWindow.webContents.getURL() || "https://vsthemes.org/",
+            "User-Agent": vsthemesWindow.webContents.getUserAgent(),
+          }
+        });
+        return { action: "deny" };
+      }
+
+      // Normal navigation within vsthemes.org
+      if (targetUrl.includes("vsthemes.org")) {
+        vsthemesWindow.loadURL(targetUrl).catch(() => {});
+        return { action: "deny" };
+      }
+
+      return { action: "deny" };
+    });
+
+    // Intercept in-page navigation (links that might directly point to files or download endpoints)
+    vsthemesWindow.webContents.on("will-navigate", (event, navUrl) => {
+      modLog("[will-navigate]:", navUrl);
+      const isDirectDownload = navUrl.match(/\.(zip|rar|7z|mp4|webm|gif)(\?.*)?$/i) ||
+                               navUrl.includes("/get/") ||
+                               navUrl.includes("server=");
+      if (isDirectDownload) {
+        event.preventDefault();
+        modLog("[Intercepted direct download will-navigate]:", navUrl);
+        vsthemesWindow.webContents.downloadURL(navUrl, {
+          headers: {
+            "Referer": vsthemesWindow.webContents.getURL() || "https://vsthemes.org/",
+            "User-Agent": vsthemesWindow.webContents.getUserAgent(),
+          }
+        });
+      }
+    });
+
+    // If a popup window is created, monitor its navigation too
+    vsthemesWindow.webContents.on("did-create-window", (childWindow) => {
+      modLog("[Child Window created]");
+      childWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+      childWindow.webContents.on("will-navigate", (event, navUrl) => {
+        modLog("[Child Window will-navigate]:", navUrl);
+        if (navUrl.match(/\.(zip|rar|7z|mp4|webm|gif)(\?.*)?$/i) || navUrl.includes("download") || navUrl.includes("server=") || navUrl.includes("/load/")) {
+          event.preventDefault();
+          vsthemesWindow.webContents.downloadURL(navUrl, {
+            headers: {
+              "Referer": vsthemesWindow.webContents.getURL() || "https://vsthemes.org/",
+              "User-Agent": vsthemesWindow.webContents.getUserAgent(),
+            }
+          });
+          childWindow.close();
+        }
+      });
+    });
+
+    // Inject styles, unlockers and download click feedback
+    const injectHelperScript = () => {
+      vsthemesWindow.webContents.executeJavaScript(`
+        (() => {
+          try {
+            // Unlock disabled buttons
+            const unlockButtons = () => {
+              document.querySelectorAll('.download-disabled, [disabled]').forEach(el => {
+                el.classList.remove('download-disabled');
+                el.removeAttribute('disabled');
+              });
+            };
+            unlockButtons();
+            setInterval(unlockButtons, 1000);
+
+            // Hide ad banners
+            if (!document.getElementById('ym-vsthemes-custom-style')) {
+              const style = document.createElement('style');
+              style.id = 'ym-vsthemes-custom-style';
+              style.textContent = \`
+                iframe[src*="ads"], div[class*="banner"], div[id*="ad_"] {
+                  display: none !important;
+                }
+                .download-disabled {
+                  opacity: 1 !important;
+                  pointer-events: auto !important;
+                }
+                #ym-vsthemes-toast {
+                  position: fixed;
+                  bottom: 24px;
+                  left: 50%;
+                  transform: translateX(-50%);
+                  background: rgba(18, 18, 28, 0.95);
+                  color: #fff;
+                  padding: 12px 24px;
+                  border-radius: 12px;
+                  border: 1px solid rgba(139, 92, 246, 0.6);
+                  font-size: 14px;
+                  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                  font-weight: 600;
+                  z-index: 2147483647;
+                  box-shadow: 0 8px 32px rgba(0,0,0,0.8);
+                  pointer-events: none;
+                  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+                  display: flex;
+                  align-items: center;
+                  gap: 10px;
+                }
+              \`;
+              document.head.appendChild(style);
+            }
+
+            // Toast feedback in window
+            window.__showDownloadToast = (msg, isSuccess) => {
+              let toast = document.getElementById('ym-vsthemes-toast');
+              if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'ym-vsthemes-toast';
+                document.body.appendChild(toast);
+              }
+              toast.innerHTML = (isSuccess ? '✅ ' : '⬇️ ') + msg;
+              toast.style.opacity = '1';
+              toast.style.transform = 'translateX(-50%) translateY(0)';
+              clearTimeout(window.__toastTimer);
+              window.__toastTimer = setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(-50%) translateY(20px)';
+              }, 4500);
+            };
+
+            // Catch user click on download buttons
+            if (!window.__ymClickHookInstalled) {
+              window.__ymClickHookInstalled = true;
+              document.addEventListener('click', (e) => {
+                const el = e.target.closest('a, button, [class*="download"], [class*="btn"], [data-url]');
+                if (!el) return;
+                const text = (el.innerText || '').trim();
+                const href = el.getAttribute('href') || el.dataset.url || el.dataset.href || '';
+                if (text.includes('Скачать') || text.includes('Download') || href.includes('download') || href.includes('/load/') || href.includes('server=') || href.match(/\.(zip|rar|mp4|webm)/i)) {
+                  if (window.__showDownloadToast) {
+                    window.__showDownloadToast('Запрос принят! Скачивание обоев...', false);
+                  }
+                }
+              }, true);
+            }
+          } catch(e) {}
+        })()
+      `).catch(() => {});
+    };
+
+    vsthemesWindow.webContents.on("dom-ready", injectHelperScript);
+    vsthemesWindow.webContents.on("did-finish-load", injectHelperScript);
+
+    vsthemesWindow.loadURL("https://vsthemes.org/wallpapers/live/").catch((err) => {
+      modLog("[vsthemesWindow.loadURL error]:", err);
+    });
+
+    vsthemesWindow.on("closed", () => {
+      vsthemesWindow = null;
+    });
+  } catch (err) {
+    modLog("[openVSThemesWindow error]:", err);
   }
-
-  ensureWallpaperDownloadListener();
-
-  vsthemesWindow = new BrowserWindow({
-    width: 1280,
-    height: 860,
-    title: "Каталог живых обоев VSThemes - Yandex Music Mod",
-    backgroundColor: "#0d0e15",
-    autoHideMenuBar: true,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      webSecurity: true,
-    },
-  });
-
-  vsthemesWindow.webContents.setUserAgent(
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
-  );
-
-  // Prevent blank popups and intercept all download and category clicks
-  vsthemesWindow.webContents.setWindowOpenHandler(({ url }) => {
-    console.log("[VSThemes setWindowOpenHandler intercepted]:", url);
-    if (url.match(/\.(zip|rar|7z|mp4|webm|gif)(\?.*)?$/i) || url.includes("download") || url.includes("/load/") || url.includes("/d/")) {
-      vsthemesWindow.webContents.downloadURL(url);
-      return { action: "deny" };
-    }
-    if (url.includes("vsthemes.org")) {
-      vsthemesWindow.loadURL(url);
-      return { action: "deny" };
-    }
-    return { action: "deny" };
-  });
-
-  // Inject script to unlock countdowns and keep all navigation within the window
-  vsthemesWindow.webContents.on("did-finish-load", () => {
-    vsthemesWindow.webContents.executeJavaScript(`
-      (() => {
-        try {
-          document.querySelectorAll('.download-disabled, [disabled]').forEach(el => {
-            el.classList.remove('download-disabled');
-            el.removeAttribute('disabled');
-          });
-          document.querySelectorAll('a[target="_blank"]').forEach(a => {
-            a.target = '_self';
-          });
-          const style = document.createElement('style');
-          style.textContent = \`
-            iframe[src*="ads"], div[class*="banner"], div[id*="ad_"] {
-              display: none !important;
-            }
-            .download-disabled {
-              opacity: 1 !important;
-              pointer-events: auto !important;
-            }
-          \`;
-          document.head.appendChild(style);
-        } catch(e) {}
-      })()
-    `).catch(() => {});
-  });
-
-  vsthemesWindow.loadURL("https://vsthemes.org/wallpapers/live/");
-
-  vsthemesWindow.on("closed", () => {
-    vsthemesWindow = null;
-  });
 }
 
 // ==========================================
