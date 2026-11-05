@@ -630,6 +630,27 @@ const BUILTIN_SYNCED_LYRICS = {
 
 
 
+    // Bypassed synchronized lyrics sign using Android HMAC secret key (Vzlomhik2005 / Stephanzion standard)
+    if (url.includes("/lyrics?") || url.includes("/lyrics")) {
+      try {
+        let reqUrl = new URL(url);
+        let pathSegments = reqUrl.pathname.split("/");
+        let trackId = pathSegments[2];
+        let timestamp = reqUrl.searchParams.get("timeStamp") || Math.floor(Date.now() / 1000);
+        let sign = await getLyricsSign(`${trackId}${timestamp}`);
+        reqUrl.searchParams.set("sign", sign);
+        reqUrl.searchParams.set("timeStamp", timestamp);
+
+        let newHeaders = new Headers(args[1] && args[1].headers ? args[1].headers : (request && request.headers ? request.headers : {}));
+        newHeaders.set("x-yandex-music-client", "YandexMusicAndroid/24023621");
+
+        const newInit = Object.assign({}, args[1] || {}, { headers: newHeaders });
+        return originalFetch.call(this, reqUrl.toString(), newInit);
+      } catch (e) {
+        console.warn("[Lyrics HMAC] bypass error:", e);
+      }
+    }
+
     // Block telemetry & tracking polling
 
     if (isTelemetry) {
@@ -3504,6 +3525,493 @@ const BUILTIN_SYNCED_LYRICS = {
 
 
   // ==========================================
+  // 5.5. NATIVE YANDEX SYNCHRONIZED LYRICS HMAC (Vzlomhik2005 standard)
+  // ==========================================
+  async function getLyricsSign(a) {
+    try {
+      const t = "p93jhgh689SBReK6ghtw62"; // Android App Secret Key
+      const n = new TextEncoder();
+      const i = n.encode(t);
+      const key = await crypto.subtle.importKey(
+        "raw",
+        i,
+        { name: "HMAC", hash: { name: "SHA-256" } },
+        false,
+        ["sign", "verify"]
+      );
+      const textBytes = n.encode(a);
+      const signature = await crypto.subtle.sign("HMAC", key, textBytes);
+      return btoa(String.fromCharCode(...new Uint8Array(signature)));
+    } catch (err) {
+      console.error("[Lyrics HMAC] Sign failed:", err);
+      return "";
+    }
+  }
+
+  // ==========================================
+  // 5.6. LIVE WALLPAPER ENGINE & WORKSHOP (Мастерская обоев)
+  // ==========================================
+  const WALLPAPER_PRESETS = [
+    {
+      id: "synthwave",
+      title: "Synthwave Sunset",
+      desc: "Неоновое закатное солнце и бесконечная ретровейв сетка",
+      type: "video",
+      badge: "4K Видео",
+      preview: "https://images.unsplash.com/photo-1508739773434-c26b3d09e071?w=400&q=80",
+      url: "https://assets.mixkit.co/videos/preview/mixkit-set-of-plateaus-seen-from-the-sky-in-a-sunset-26070-large.mp4"
+    },
+    {
+      id: "cyberpunk",
+      title: "Cyberpunk Rain",
+      desc: "Атмосферный ночной неоновый город под дождем",
+      type: "video",
+      badge: "Видео",
+      preview: "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=400&q=80",
+      url: "https://assets.mixkit.co/videos/preview/mixkit-digital-animation-of-screens-with-glitch-effect-31830-large.mp4"
+    },
+    {
+      id: "lofi",
+      title: "Cozy Lofi Night",
+      desc: "Уютный чилл-фон для вечернего прослушивания",
+      type: "video",
+      badge: "HD Видео",
+      preview: "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=400&q=80",
+      url: "https://assets.mixkit.co/videos/preview/mixkit-starry-night-sky-with-a-shooting-star-34538-large.mp4"
+    },
+    {
+      id: "matrix",
+      title: "Matrix Code Rain",
+      desc: "Интерактивный зеленый цифровой дождь 60 FPS",
+      type: "canvas",
+      badge: "60 FPS Canvas",
+      preview: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=400&q=80",
+      url: "canvas:matrix"
+    },
+    {
+      id: "waves",
+      title: "Neon Audio Waves",
+      desc: "Пульсирующие градиентные волны света",
+      type: "canvas",
+      badge: "60 FPS Canvas",
+      preview: "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=400&q=80",
+      url: "canvas:waves"
+    },
+    {
+      id: "hyperspace",
+      title: "Cosmic Starfield",
+      desc: "Полет через трехмерное пространство звезд",
+      type: "canvas",
+      badge: "3D Canvas",
+      preview: "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?w=400&q=80",
+      url: "canvas:starfield"
+    }
+  ];
+
+  let liveWallpaperAnimFrame = null;
+
+  function initLiveWallpaper() {
+    if (document.getElementById("ym-live-wallpaper-container")) return;
+
+    const container = document.createElement("div");
+    container.id = "ym-live-wallpaper-container";
+    container.innerHTML = `
+      <video id="ym-live-wallpaper-video" loop muted playsinline style="display:none;"></video>
+      <canvas id="ym-live-wallpaper-canvas" style="display:none;"></canvas>
+      <img id="ym-live-wallpaper-image" style="display:none;" />
+      <div id="ym-live-wallpaper-overlay"></div>
+    `;
+    document.body.prepend(container);
+
+    // Auto-pause listener on blur / minimize for extreme energy & GPU efficiency
+    window.addEventListener("blur", () => {
+      const pauseOnBlur = modSettings["wallpaper/pauseOnBlur"] !== false;
+      if (!pauseOnBlur) return;
+      const vid = document.getElementById("ym-live-wallpaper-video");
+      if (vid && !vid.paused) {
+        try { vid.pause(); } catch (e) {}
+      }
+    });
+
+    window.addEventListener("focus", () => {
+      const isEnabled = !!modSettings["wallpaper/enabled"];
+      if (!isEnabled) return;
+      const vid = document.getElementById("ym-live-wallpaper-video");
+      if (vid && vid.style.display !== "none" && vid.paused) {
+        try { vid.play().catch(() => {}); } catch (e) {}
+      }
+    });
+
+    applyLiveWallpaperSettings();
+  }
+
+  function applyLiveWallpaperSettings() {
+    const container = document.getElementById("ym-live-wallpaper-container");
+    if (!container) return;
+
+    const isEnabled = !!modSettings["wallpaper/enabled"];
+    const opacity = modSettings["wallpaper/opacity"] !== undefined ? modSettings["wallpaper/opacity"] : 55;
+    const blur = modSettings["wallpaper/blur"] !== undefined ? modSettings["wallpaper/blur"] : 0;
+    const source = modSettings["wallpaper/source"] || "synthwave";
+    const type = modSettings["wallpaper/type"] || "video";
+    const customUrl = modSettings["wallpaper/url"] || "";
+
+    container.style.setProperty("--ym-wallpaper-opacity", (opacity / 100).toFixed(2));
+    container.style.setProperty("--ym-wallpaper-blur", `${blur}px`);
+
+    if (!isEnabled) {
+      document.body.classList.remove("ym-has-live-wallpaper");
+      stopCanvasWallpaper();
+      const vid = document.getElementById("ym-live-wallpaper-video");
+      if (vid) {
+        vid.pause();
+        vid.style.display = "none";
+        vid.src = "";
+      }
+      const img = document.getElementById("ym-live-wallpaper-image");
+      if (img) img.style.display = "none";
+      const cvs = document.getElementById("ym-live-wallpaper-canvas");
+      if (cvs) cvs.style.display = "none";
+      return;
+    }
+
+    document.body.classList.add("ym-has-live-wallpaper");
+
+    const vid = document.getElementById("ym-live-wallpaper-video");
+    const img = document.getElementById("ym-live-wallpaper-image");
+    const cvs = document.getElementById("ym-live-wallpaper-canvas");
+
+    // Resolve URL / Source
+    let activeType = type;
+    let activeUrl = customUrl;
+
+    if (source !== "custom") {
+      const preset = WALLPAPER_PRESETS.find(p => p.id === source);
+      if (preset) {
+        activeType = preset.type;
+        activeUrl = preset.url;
+      }
+    }
+
+    if (activeType === "canvas") {
+      if (vid) { vid.pause(); vid.style.display = "none"; }
+      if (img) img.style.display = "none";
+      if (cvs) {
+        cvs.style.display = "block";
+        const mode = activeUrl.replace("canvas:", "") || "matrix";
+        startCanvasWallpaper(cvs, mode);
+      }
+    } else if (activeType === "image") {
+      stopCanvasWallpaper();
+      if (vid) { vid.pause(); vid.style.display = "none"; }
+      if (cvs) cvs.style.display = "none";
+      if (img) {
+        img.style.display = "block";
+        if (img.src !== activeUrl) img.src = activeUrl;
+      }
+    } else {
+      // Video
+      stopCanvasWallpaper();
+      if (cvs) cvs.style.display = "none";
+      if (img) img.style.display = "none";
+      if (vid) {
+        vid.style.display = "block";
+        if (vid.src !== activeUrl) {
+          vid.src = activeUrl;
+          vid.load();
+        }
+        vid.play().catch(() => {});
+      }
+    }
+  }
+
+  function stopCanvasWallpaper() {
+    if (liveWallpaperAnimFrame) {
+      cancelAnimationFrame(liveWallpaperAnimFrame);
+      liveWallpaperAnimFrame = null;
+    }
+  }
+
+  function startCanvasWallpaper(canvas, mode) {
+    stopCanvasWallpaper();
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener("resize", resize, { once: true });
+
+    if (mode === "matrix") {
+      const chars = "0123456789ABCDEFЯНДЕКСМУЗЫКАモド";
+      const fontSize = 16;
+      let columns = Math.floor(canvas.width / fontSize);
+      let drops = new Array(columns).fill(1);
+
+      function drawMatrix() {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.08)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = "#00ff66";
+        ctx.font = `${fontSize}px monospace`;
+
+        for (let i = 0; i < drops.length; i++) {
+          const text = chars.charAt(Math.floor(Math.random() * chars.length));
+          ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+
+          if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+            drops[i] = 0;
+          }
+          drops[i]++;
+        }
+        liveWallpaperAnimFrame = requestAnimationFrame(drawMatrix);
+      }
+      drawMatrix();
+    } else if (mode === "starfield") {
+      const stars = [];
+      const numStars = 400;
+      for (let i = 0; i < numStars; i++) {
+        stars.push({
+          x: (Math.random() - 0.5) * canvas.width * 2,
+          y: (Math.random() - 0.5) * canvas.height * 2,
+          z: Math.random() * canvas.width,
+        });
+      }
+
+      function drawStarfield() {
+        ctx.fillStyle = "rgba(5, 5, 12, 0.25)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2;
+
+        for (let i = 0; i < stars.length; i++) {
+          const star = stars[i];
+          star.z -= 4;
+          if (star.z <= 0) {
+            star.z = canvas.width;
+            star.x = (Math.random() - 0.5) * canvas.width * 2;
+            star.y = (Math.random() - 0.5) * canvas.height * 2;
+          }
+
+          const k = 250 / star.z;
+          const px = star.x * k + cx;
+          const py = star.y * k + cy;
+
+          if (px >= 0 && px < canvas.width && py >= 0 && py < canvas.height) {
+            const size = Math.max(1, (1 - star.z / canvas.width) * 3);
+            const shade = Math.floor((1 - star.z / canvas.width) * 255);
+            ctx.fillStyle = `rgb(${shade}, ${shade}, 255)`;
+            ctx.beginPath();
+            ctx.arc(px, py, size, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        liveWallpaperAnimFrame = requestAnimationFrame(drawStarfield);
+      }
+      drawStarfield();
+    } else {
+      // waves
+      let step = 0;
+      function drawWaves() {
+        ctx.fillStyle = "rgba(8, 8, 16, 0.12)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        step += 0.02;
+        const numLines = 5;
+        for (let j = 0; j < numLines; j++) {
+          ctx.beginPath();
+          ctx.lineWidth = 2.5;
+          const hue = (step * 25 + j * 45) % 360;
+          ctx.strokeStyle = `hsla(${hue}, 85%, 60%, 0.65)`;
+
+          for (let x = 0; x < canvas.width; x += 10) {
+            const y =
+              canvas.height / 2 +
+              Math.sin(x * 0.005 + step + j * 0.8) * 80 +
+              Math.cos(x * 0.01 - step) * 35;
+            if (x === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+        }
+        liveWallpaperAnimFrame = requestAnimationFrame(drawWaves);
+      }
+      drawWaves();
+    }
+  }
+
+  function renderWallpaperGrid() {
+    const grid = document.getElementById("ym-wallpaper-grid");
+    if (!grid) return;
+
+    grid.innerHTML = "";
+    const activeSource = modSettings["wallpaper/source"] || "synthwave";
+    const isWpEnabled = !!modSettings["wallpaper/enabled"];
+
+    WALLPAPER_PRESETS.forEach(preset => {
+      const card = document.createElement("div");
+      card.className = `ym-wallpaper-card ${isWpEnabled && activeSource === preset.id ? "active" : ""}`;
+      card.innerHTML = `
+        <div class="ym-wallpaper-preview" style="background-image: url('${preset.preview}');">
+          <span class="ym-wallpaper-badge">${preset.badge}</span>
+        </div>
+        <div class="ym-wallpaper-title">${preset.title}</div>
+        <div class="ym-wallpaper-desc">${preset.desc}</div>
+        <button class="ym-btn-action">${isWpEnabled && activeSource === preset.id ? "✓ Активно" : "Выбрать"}</button>
+      `;
+
+      card.addEventListener("click", () => {
+        saveSetting("wallpaper/enabled", true);
+        saveSetting("wallpaper/source", preset.id);
+        saveSetting("wallpaper/type", preset.type);
+        saveSetting("wallpaper/url", preset.url);
+
+        const enableSwitch = document.getElementById("opt-wallpaper-enable");
+        if (enableSwitch) enableSwitch.checked = true;
+
+        applyLiveWallpaperSettings();
+        renderWallpaperGrid();
+      });
+
+      grid.appendChild(card);
+    });
+  }
+
+  // ==========================================
+  // 5.7. CUSTOM NEON TOP TRACKBAR (TikTok / Image 3)
+  // ==========================================
+  let topTrackbarElem = null;
+  let topTrackbarFill = null;
+  let topTrackbarThumb = null;
+  let isSeekingTopTrackbar = false;
+
+  function initTopTrackbar() {
+    ensureTopTrackbar();
+    applyTrackbarStyle();
+  }
+
+  function ensureTopTrackbar() {
+    const playerBar =
+      document.querySelector('[class*="PlayerBarDesktop_root"]') ||
+      document.querySelector('section[data-test-id="PLAYERBAR_DESKTOP"]');
+
+    if (!playerBar) return;
+
+    if (!topTrackbarElem || !playerBar.contains(topTrackbarElem)) {
+      if (topTrackbarElem) {
+        try { topTrackbarElem.remove(); } catch (e) {}
+      }
+
+      const bar = document.createElement("div");
+      bar.className = "ym-top-trackbar";
+      bar.id = "ym-top-trackbar";
+      bar.innerHTML = `
+        <div class="ym-top-trackbar-fill" id="ym-top-trackbar-fill">
+          <div class="ym-top-trackbar-thumb" id="ym-top-trackbar-thumb"></div>
+        </div>
+      `;
+
+      function handleSeek(e) {
+        const rect = bar.getBoundingClientRect();
+        if (rect.width <= 0) return;
+        const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+        let ratio = (clientX - rect.left) / rect.width;
+        ratio = Math.max(0, Math.min(1, ratio));
+
+        if (topTrackbarFill) {
+          topTrackbarFill.style.width = `${(ratio * 100).toFixed(2)}%`;
+        }
+
+        // Seek via React Player / Native ProgressBar click
+        const defaultProgressBar =
+          document.querySelector('div[class*="ProgressBar_sliderThumb"]') ||
+          document.querySelector('div[data-test-id="PROGRESS_BAR"]') ||
+          document.querySelector('[class*="ProgressBar_sliderRoot"]');
+
+        if (defaultProgressBar) {
+          const pbRect = defaultProgressBar.getBoundingClientRect();
+          const targetX = pbRect.left + pbRect.width * ratio;
+          const targetY = pbRect.top + pbRect.height / 2;
+
+          const mDown = new MouseEvent("mousedown", { clientX: targetX, clientY: targetY, bubbles: true });
+          const mUp = new MouseEvent("mouseup", { clientX: targetX, clientY: targetY, bubbles: true });
+          defaultProgressBar.dispatchEvent(mDown);
+          defaultProgressBar.dispatchEvent(mUp);
+        }
+      }
+
+      bar.addEventListener("mousedown", (e) => {
+        isSeekingTopTrackbar = true;
+        handleSeek(e);
+
+        const onMouseMove = (me) => {
+          if (isSeekingTopTrackbar) handleSeek(me);
+        };
+        const onMouseUp = () => {
+          isSeekingTopTrackbar = false;
+          window.removeEventListener("mousemove", onMouseMove);
+          window.removeEventListener("mouseup", onMouseUp);
+        };
+        window.addEventListener("mousemove", onMouseMove);
+        window.addEventListener("mouseup", onMouseUp);
+      });
+
+      playerBar.style.position = "relative";
+      playerBar.prepend(bar);
+
+      topTrackbarElem = bar;
+      topTrackbarFill = bar.querySelector("#ym-top-trackbar-fill");
+      topTrackbarThumb = bar.querySelector("#ym-top-trackbar-thumb");
+    }
+  }
+
+  function applyTrackbarStyle() {
+    const isEnabled = modSettings["trackbar/topBarEnabled"] !== false;
+    const color = modSettings["trackbar/color"] || "#ffe600";
+    const thickness = modSettings["trackbar/thickness"] || "3px";
+    const hideDefault = !!modSettings["trackbar/hideDefaultSlider"];
+
+    if (hideDefault) {
+      document.body.classList.add("ym-hide-default-slider");
+    } else {
+      document.body.classList.remove("ym-hide-default-slider");
+    }
+
+    if (!topTrackbarElem) ensureTopTrackbar();
+    if (!topTrackbarElem) return;
+
+    if (!isEnabled) {
+      topTrackbarElem.style.display = "none";
+      return;
+    }
+
+    topTrackbarElem.style.display = "block";
+    topTrackbarElem.style.setProperty("--ym-trackbar-color", color);
+    topTrackbarElem.style.setProperty("--ym-trackbar-height", thickness);
+  }
+
+  function updateTopTrackbar(position, duration) {
+    if (isSeekingTopTrackbar) return;
+    if (!topTrackbarElem || !topTrackbarFill) {
+      ensureTopTrackbar();
+    }
+    if (!topTrackbarFill) return;
+
+    if (duration > 0 && position >= 0) {
+      const pct = Math.min(100, Math.max(0, (position / duration) * 100));
+      topTrackbarFill.style.width = `${pct.toFixed(2)}%`;
+    } else {
+      topTrackbarFill.style.width = "0%";
+    }
+  }
+
+
+    // ==========================================
 
   // 6. MOD SETTINGS MODAL UI
 
@@ -3604,19 +4112,12 @@ const BUILTIN_SYNCED_LYRICS = {
             </button>
 
             <button class="ym-tab-btn" data-tab="tab-wallpapers">
-
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-
                 <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-
                 <line x1="8" y1="21" x2="16" y2="21"></line>
-
                 <line x1="12" y1="17" x2="12" y2="21"></line>
-
               </svg>
-
               <span>Мастерская обоев</span>
-
             </button>
 
             <button class="ym-tab-btn" data-tab="tab-cleaner">
@@ -4030,6 +4531,12 @@ const BUILTIN_SYNCED_LYRICS = {
                     <span class="ym-slider"></span>
 
                   </label>
+
+                </div>
+
+              </div>
+
+              <!-- Custom TikTok Neon Player Trackbar -->
               <div class="ym-card">
                 <div class="ym-card-title">Кастомный трекбар плеера (Стиль TikTok)</div>
                 <div class="ym-row">
@@ -4064,14 +4571,14 @@ const BUILTIN_SYNCED_LYRICS = {
                   </div>
                   <select class="ym-select" id="opt-trackbar-thickness">
                     <option value="2px">Тонкая (2px)</option>
-                    <option value="3px" selected>Стандартная (3px — как на фото)</option>
+                    <option value="3px" selected>Стандартная (3px — как на видео)</option>
                     <option value="5px">Выразительная (5px)</option>
                   </select>
                 </div>
                 <div class="ym-row">
                   <div class="ym-col-info">
                     <span class="ym-label">Скрыть стандартный ползунок плеера</span>
-                    <span class="ym-desc">Оставить только верхний неоновый бар для ультра-чистого вида</span>
+                    <span class="ym-desc">Оставить только верхний неоновый бар для чистого минимализма</span>
                   </div>
                   <label class="ym-switch">
                     <input type="checkbox" id="opt-trackbar-hide-default">
@@ -4079,26 +4586,27 @@ const BUILTIN_SYNCED_LYRICS = {
                   </label>
                 </div>
               </div>
+
             </div>
 
             <!-- TAB 1.5: WALLPAPER WORKSHOP -->
             <div class="ym-tab-pane" id="tab-wallpapers">
               <div class="ym-card">
-                <div class="ym-card-title">Мастерская живых обоев</div>
+                <div class="ym-card-title">Управление живыми обоями</div>
                 <div class="ym-row">
                   <div class="ym-col-info">
-                    <span class="ym-label">Включить живые обои</span>
-                    <span class="ym-desc">Отображать анимированные циклы, видео и шейдеры на фоне приложения</span>
+                    <span class="ym-label">Включить анимированные обои</span>
+                    <span class="ym-desc">Плавный зацикленный видео-фон или 60fps генеративные шейдеры</span>
                   </div>
                   <label class="ym-switch">
-                    <input type="checkbox" id="opt-wallpaper-enabled">
+                    <input type="checkbox" id="opt-wallpaper-enable">
                     <span class="ym-slider"></span>
                   </label>
                 </div>
                 <div class="ym-row">
                   <div class="ym-col-info">
-                    <span class="ym-label">Затемнение подложки (Dimming)</span>
-                    <span class="ym-desc">Интенсивность затемнения фона для 100% читаемости названий треков</span>
+                    <span class="ym-label">Затемнение фона (Dimming)</span>
+                    <span class="ym-desc">Регулирует яркость для идеальной читаемости названий треков</span>
                   </div>
                   <div class="ym-range-wrap">
                     <input type="range" class="ym-range" id="opt-wallpaper-opacity" min="10" max="90" value="55">
@@ -4862,12 +5370,47 @@ const BUILTIN_SYNCED_LYRICS = {
                 <div class="ym-row" id="row-discord-app-title">
                   <div class="ym-col-info">
                     <span class="ym-label">Название активности в Discord</span>
-                    <span class="ym-desc">Выберите, как отображается игра в статусе Discord</span>
+                    <span class="ym-desc">Выберите имя приложения в статусе Discord</span>
                   </div>
                   <select class="ym-select" id="opt-discord-app-title">
-                    <option value="ru">🇷🇺 Яндекс Музыка</option>
+                    <option value="ru">🇷🇺 Яндекс Музыка (Слушает Яндекс Музыка)</option>
+                    <option value="ru_alt">🇷🇺 Яндекс Музыку (Слушает / Играет в Яндекс Музыку)</option>
                     <option value="en">🇬🇧 Yandex Music</option>
                   </select>
+                </div>
+
+                <div class="ym-row" id="row-discord-activity-type">
+                  <div class="ym-col-info">
+                    <span class="ym-label">Тип активности Discord</span>
+                    <span class="ym-desc">Отображать «Слушает» вместо «Играет в»</span>
+                  </div>
+                  <select class="ym-select" id="opt-discord-activity-type">
+                    <option value="listening" selected>🎧 Слушает (Listening)</option>
+                    <option value="playing">🎮 Играет в (Playing)</option>
+                  </select>
+                </div>
+
+                <div class="ym-row" id="row-discord-time-format">
+                  <div class="ym-col-info">
+                    <span class="ym-label">Формат времени в статусе</span>
+                    <span class="ym-desc">Показывать прогресс трека (01:34 ── 02:54) вместо обратного отсчета</span>
+                  </div>
+                  <select class="ym-select" id="opt-discord-time-format">
+                    <option value="progress" selected>🎵 Прогресс трека (01:34 ── 02:54)</option>
+                    <option value="elapsed">⏱️ Прошло времени от начала</option>
+                    <option value="remaining">⏳ Обратный отсчет до конца</option>
+                  </select>
+                </div>
+
+                <div class="ym-row">
+                  <div class="ym-col-info">
+                    <span class="ym-label">Кнопка мода в Discord</span>
+                    <span class="ym-desc">Отображать вторую кнопку со ссылкой на Yandex Music Mod</span>
+                  </div>
+                  <label class="ym-switch">
+                    <input type="checkbox" id="opt-discord-mod-button" checked>
+                    <span class="ym-slider"></span>
+                  </label>
                 </div>
 
 
@@ -5198,6 +5741,180 @@ const BUILTIN_SYNCED_LYRICS = {
 
     const optDiscordRpc = document.getElementById("opt-discord-rpc");
     const optDiscordAppTitle = document.getElementById("opt-discord-app-title");
+    const optDiscordActivityType = document.getElementById("opt-discord-activity-type");
+    const optDiscordTimeFormat = document.getElementById("opt-discord-time-format");
+    const optDiscordModButton = document.getElementById("opt-discord-mod-button");
+
+    if (optDiscordActivityType) {
+      optDiscordActivityType.value = modSettings["discordRPC/activityType"] || "listening";
+      optDiscordActivityType.addEventListener("change", () => {
+        saveSetting("discordRPC/activityType", optDiscordActivityType.value);
+      });
+    }
+
+    if (optDiscordTimeFormat) {
+      optDiscordTimeFormat.value = modSettings["discordRPC/timeFormat"] || "progress";
+      optDiscordTimeFormat.addEventListener("change", () => {
+        saveSetting("discordRPC/timeFormat", optDiscordTimeFormat.value);
+      });
+    }
+
+    if (optDiscordModButton) {
+      optDiscordModButton.checked = modSettings["discordRPC/showModButton"] !== false;
+      optDiscordModButton.addEventListener("change", () => {
+        saveSetting("discordRPC/showModButton", optDiscordModButton.checked);
+      });
+    }
+
+    // Live Wallpaper Workshop Binds
+    try {
+      const optWpEnable = document.getElementById("opt-wallpaper-enable");
+      const optWpOpacity = document.getElementById("opt-wallpaper-opacity");
+      const valWpOpacity = document.getElementById("val-wallpaper-opacity");
+      const optWpBlur = document.getElementById("opt-wallpaper-blur");
+      const valWpBlur = document.getElementById("val-wallpaper-blur");
+      const optWpPause = document.getElementById("opt-wallpaper-pause");
+      const optWpCustomUrl = document.getElementById("opt-wallpaper-custom-url");
+      const btnApplyCustom = document.getElementById("btn-apply-custom-wallpaper");
+      const btnResetWp = document.getElementById("btn-reset-wallpaper");
+      const btnRefreshWp = document.getElementById("btn-refresh-wallpapers");
+
+      if (optWpEnable) {
+        optWpEnable.checked = !!modSettings["wallpaper/enabled"];
+        optWpEnable.addEventListener("change", () => {
+          saveSetting("wallpaper/enabled", optWpEnable.checked);
+          applyLiveWallpaperSettings();
+        });
+      }
+
+      if (optWpOpacity && valWpOpacity) {
+        optWpOpacity.value = modSettings["wallpaper/opacity"] !== undefined ? modSettings["wallpaper/opacity"] : 55;
+        valWpOpacity.textContent = `${optWpOpacity.value}%`;
+        optWpOpacity.addEventListener("input", () => {
+          valWpOpacity.textContent = `${optWpOpacity.value}%`;
+          saveSetting("wallpaper/opacity", parseInt(optWpOpacity.value, 10));
+          applyLiveWallpaperSettings();
+        });
+      }
+
+      if (optWpBlur && valWpBlur) {
+        optWpBlur.value = modSettings["wallpaper/blur"] !== undefined ? modSettings["wallpaper/blur"] : 0;
+        valWpBlur.textContent = `${optWpBlur.value}px`;
+        optWpBlur.addEventListener("input", () => {
+          valWpBlur.textContent = `${optWpBlur.value}px`;
+          saveSetting("wallpaper/blur", parseInt(optWpBlur.value, 10));
+          applyLiveWallpaperSettings();
+        });
+      }
+
+      if (optWpPause) {
+        optWpPause.checked = modSettings["wallpaper/pauseOnBlur"] !== false;
+        optWpPause.addEventListener("change", () => {
+          saveSetting("wallpaper/pauseOnBlur", optWpPause.checked);
+          applyLiveWallpaperSettings();
+        });
+      }
+
+      if (btnApplyCustom && optWpCustomUrl) {
+        btnApplyCustom.addEventListener("click", () => {
+          const rawUrl = optWpCustomUrl.value.trim();
+          if (!rawUrl) return;
+          const isVid = /\.(mp4|webm|m4v)($|\?)/i.test(rawUrl);
+          saveSetting("wallpaper/enabled", true);
+          saveSetting("wallpaper/source", "custom");
+          saveSetting("wallpaper/type", isVid ? "video" : "image");
+          saveSetting("wallpaper/url", rawUrl);
+          if (optWpEnable) optWpEnable.checked = true;
+          applyLiveWallpaperSettings();
+          renderWallpaperGrid();
+        });
+      }
+
+      if (btnResetWp) {
+        btnResetWp.addEventListener("click", () => {
+          saveSetting("wallpaper/enabled", false);
+          saveSetting("wallpaper/source", "synthwave");
+          saveSetting("wallpaper/type", "video");
+          saveSetting("wallpaper/url", "");
+          if (optWpEnable) optWpEnable.checked = false;
+          applyLiveWallpaperSettings();
+          renderWallpaperGrid();
+        });
+      }
+
+      if (btnRefreshWp) {
+        btnRefreshWp.addEventListener("click", () => {
+          renderWallpaperGrid();
+        });
+      }
+
+      renderWallpaperGrid();
+    } catch (errWp) {
+      console.error("[Mod Settings] Error binding wallpaper controls:", errWp);
+    }
+
+    // Custom Neon Top Trackbar Binds
+    try {
+      const optTbTop = document.getElementById("opt-trackbar-top");
+      const optTbThickness = document.getElementById("opt-trackbar-thickness");
+      const optTbHideDef = document.getElementById("opt-trackbar-hide-default");
+      const optTbColorPick = document.getElementById("opt-trackbar-custom-color");
+      const paletteWrap = document.getElementById("trackbar-palette");
+
+      if (optTbTop) {
+        optTbTop.checked = modSettings["trackbar/topBarEnabled"] !== false;
+        optTbTop.addEventListener("change", () => {
+          saveSetting("trackbar/topBarEnabled", optTbTop.checked);
+          applyTrackbarStyle();
+        });
+      }
+
+      if (optTbThickness) {
+        optTbThickness.value = modSettings["trackbar/thickness"] || "3px";
+        optTbThickness.addEventListener("change", () => {
+          saveSetting("trackbar/thickness", optTbThickness.value);
+          applyTrackbarStyle();
+        });
+      }
+
+      if (optTbHideDef) {
+        optTbHideDef.checked = !!modSettings["trackbar/hideDefaultSlider"];
+        optTbHideDef.addEventListener("change", () => {
+          saveSetting("trackbar/hideDefaultSlider", optTbHideDef.checked);
+          applyTrackbarStyle();
+        });
+      }
+
+      const curTbColor = modSettings["trackbar/color"] || "#ffe600";
+      if (optTbColorPick) {
+        optTbColorPick.value = curTbColor;
+        optTbColorPick.addEventListener("input", () => {
+          saveSetting("trackbar/color", optTbColorPick.value);
+          applyTrackbarStyle();
+          if (paletteWrap) {
+            paletteWrap.querySelectorAll(".ym-color-swatch").forEach(s => s.classList.remove("active"));
+          }
+        });
+      }
+
+      if (paletteWrap) {
+        paletteWrap.querySelectorAll(".ym-color-swatch").forEach(swatch => {
+          const swatchCol = swatch.getAttribute("data-color");
+          if (swatchCol === curTbColor) swatch.classList.add("active");
+          else swatch.classList.remove("active");
+
+          swatch.addEventListener("click", () => {
+            paletteWrap.querySelectorAll(".ym-color-swatch").forEach(s => s.classList.remove("active"));
+            swatch.classList.add("active");
+            saveSetting("trackbar/color", swatchCol);
+            if (optTbColorPick) optTbColorPick.value = swatchCol;
+            applyTrackbarStyle();
+          });
+        });
+      }
+    } catch (errTb) {
+      console.error("[Mod Settings] Error binding trackbar controls:", errTb);
+    }
     if (optDiscordAppTitle) {
       optDiscordAppTitle.value = modSettings["discordRPC/appTitle"] || "ru";
       optDiscordAppTitle.addEventListener("change", () => {
@@ -6673,6 +7390,10 @@ const BUILTIN_SYNCED_LYRICS = {
 
           }
 
+          try {
+            updateTopTrackbar(pos, dur);
+          } catch (e) {}
+
 
 
           // If new track detected, fetch lyrics and notify
@@ -6947,17 +7668,17 @@ const BUILTIN_SYNCED_LYRICS = {
 
     try {
 
-    try {
-      initLiveWallpaper();
-    } catch (e) {
-      console.error("[YandexMusicMod] Error initializing live wallpaper:", e);
-    }
+      try {
+        initLiveWallpaper();
+      } catch (e) {
+        console.error("[YandexMusicMod] Error initializing live wallpaper:", e);
+      }
 
-    try {
-      initTopTrackbar();
-    } catch (e) {
-      console.error("[YandexMusicMod] Error initializing top trackbar:", e);
-    }
+      try {
+        initTopTrackbar();
+      } catch (e) {
+        console.error("[YandexMusicMod] Error initializing top trackbar:", e);
+      }
 
       const accent = modSettings["custom-themes/accent"] || "#007acc";
 
@@ -7053,8 +7774,6 @@ const BUILTIN_SYNCED_LYRICS = {
 
       injectFloatingBadge();
 
-        ensureTopTrackbar();
-
     } catch (e) {
 
       console.error("[YandexMusicMod] Error injecting Mod buttons:", e);
@@ -7070,8 +7789,6 @@ const BUILTIN_SYNCED_LYRICS = {
         injectSidebarButton();
 
         injectFloatingBadge();
-
-        ensureTopTrackbar();
 
       });
 

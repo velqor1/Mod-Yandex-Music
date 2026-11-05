@@ -195,6 +195,13 @@ class DiscordRPC {
           if (this.lastActivity) {
             this.sendActivityPayload(this.lastActivity);
           }
+        } else if (data.evt === "ERROR" || (data.cmd === "SET_ACTIVITY" && data.data && data.data.code)) {
+          if (this.lastActivity && this.lastActivity.type === 2) {
+            console.warn("[Discord RPC] Activity type 2 rejected by Discord, falling back to type 0:", data);
+            const fallbackAct = Object.assign({}, this.lastActivity, { type: 0 });
+            this.lastActivity = fallbackAct;
+            this.sendActivityPayload(fallbackAct);
+          }
         }
       } catch (e) {}
     }

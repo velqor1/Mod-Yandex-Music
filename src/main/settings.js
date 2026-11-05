@@ -78,6 +78,7 @@ const DEFAULT_SETTINGS = {
   "discordRPC/enabled": true,
   "discordRPC/activityType": "listening", // "listening" (Слушает) | "playing" (Играет в)
   "discordRPC/timeFormat": "progress", // "progress" (01:34 / 02:54) | "elapsed" (прошло) | "remaining" (обратный отсчет)
+  "discordRPC/showModButton": true,
   "devtools/enabled": true,
   "blockAds/enabled": true,
   "autoQuality/enabled": true,

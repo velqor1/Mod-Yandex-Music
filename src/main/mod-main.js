@@ -115,9 +115,13 @@ function initModMain() {
   } catch (e) {}
 
   // 1. Discord RPC
+  function resolveDiscordClientId(appTitle) {
+    if (appTitle === "en") return "1269807014393942046";
+    if (appTitle === "ru_alt") return "1269826362399522849";
+    return "1283109459463377011"; // "Яндекс Музыка" (Vzlomhik2005 standard)
+  }
   const initialAppTitle = settingsManager.get("discordRPC/appTitle", "ru");
-  const initialClientId = initialAppTitle === "en" ? "1269807014393942046" : "1269826362399522849";
-  discordRPC = new DiscordRPC(initialClientId);
+  discordRPC = new DiscordRPC(resolveDiscordClientId(initialAppTitle));
   const rpcEnabled = settingsManager.get("discordRPC/enabled", true);
   discordRPC.enabled = rpcEnabled;
   if (rpcEnabled) {
@@ -126,13 +130,13 @@ function initModMain() {
 
   settingsManager.onChange((key, value) => {
     if (key === "discordRPC/appTitle") {
-      const newCid = value === "en" ? "1269807014393942046" : "1269826362399522849";
+      const newCid = resolveDiscordClientId(value);
       if (discordRPC) {
         discordRPC.setClientId(newCid);
         if (lastPlayerState) updateDiscordActivity(lastPlayerState);
       }
     }
-    if (key === "discordRPC/activityType" || key === "discordRPC/timeFormat") {
+    if (key === "discordRPC/activityType" || key === "discordRPC/timeFormat" || key === "discordRPC/showModButton") {
       if (lastPlayerState) {
         rpcLastSentState.timestamp = 0;
         updateDiscordActivity(lastPlayerState);
@@ -705,6 +709,8 @@ function updateDiscordActivity(state) {
     const startSec = now - Math.floor(position || 0);
     if (timeFormat === "elapsed") {
       activity.timestamps = { start: startSec };
+    } else if (timeFormat === "remaining" && duration > 0) {
+      activity.timestamps = { end: startSec + Math.floor(duration) };
     } else if (duration > 0) {
       activity.timestamps = {
         start: startSec,
@@ -715,13 +721,22 @@ function updateDiscordActivity(state) {
     }
   }
 
+  const buttons = [];
   if (trackId && !trackId.includes("-") && trackId !== "0" && String(trackId).match(/^\d+$/)) {
-    activity.buttons = [
-      {
-        label: isEn ? "🎵 Listen on Yandex Music" : "🎵 Слушать в Яндекс Музыке",
-        url: `https://music.yandex.ru/track/${trackId}`,
-      },
-    ];
+    buttons.push({
+      label: isEn ? "🎵 Open" : "🎵 Открыть",
+      url: `https://music.yandex.ru/track/${trackId}`,
+    });
+  }
+  const showModBtn = settingsManager ? settingsManager.get("discordRPC/showModButton", true) : true;
+  if (showModBtn) {
+    buttons.push({
+      label: "💻 Yandex Music Mod",
+      url: "https://github.com/velqor1/Yandex-Music-Mod",
+    });
+  }
+  if (buttons.length > 0) {
+    activity.buttons = buttons;
   }
 
   discordRPC.setActivity(activity);
