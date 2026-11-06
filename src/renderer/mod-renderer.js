@@ -71,6 +71,7 @@ const BUILTIN_SYNCED_LYRICS = {
 // ==========================================
 // 0. AUDIO ELEMENT CAPTURE (v1.3.13)
 // Intercepts detached <audio> elements created by Yandex Music Yasp player
+// STRICTLY EXCLUDES <video> (e.g. animated live wallpapers)
 // ==========================================
 (function setupAudioCapture() {
   if (window.__ymAudioHookInstalled) return;
@@ -78,21 +79,40 @@ const BUILTIN_SYNCED_LYRICS = {
   window.__ymActiveAudio = null;
   window.__ymKnownAudios = new Set();
 
+  const isRealAudio = (el) => {
+    if (!el) return false;
+    if (el.id === "ym-live-wallpaper-video") return false;
+    if (el.tagName && el.tagName.toLowerCase() === "video") return false;
+    if (typeof HTMLVideoElement !== "undefined" && el instanceof HTMLVideoElement) return false;
+    if (typeof HTMLAudioElement !== "undefined" && el instanceof HTMLAudioElement) return true;
+    return el.tagName && el.tagName.toLowerCase() === "audio";
+  };
+
   function registerAudio(audio) {
-    if (!audio || !(audio instanceof HTMLMediaElement)) return;
+    if (!audio || !isRealAudio(audio)) return;
     window.__ymKnownAudios.add(audio);
     window.__ymActiveAudio = audio;
+
+    if (typeof window.__ymCurrentVolume === "number") {
+      try { audio.volume = window.__ymCurrentVolume; } catch (e) {}
+    }
 
     if (!audio.__ymTrackingAttached) {
       audio.__ymTrackingAttached = true;
       const onTick = () => {
+        if (!isRealAudio(audio)) return;
         window.__ymActiveAudio = audio;
         if (typeof window.__ymOnAudioTimeUpdate === "function") {
           window.__ymOnAudioTimeUpdate(audio.currentTime, audio.duration, !audio.paused);
         }
       };
       audio.addEventListener("timeupdate", onTick);
-      audio.addEventListener("play", onTick);
+      audio.addEventListener("play", () => {
+        if (typeof window.__ymCurrentVolume === "number") {
+          try { audio.volume = window.__ymCurrentVolume; } catch (e) {}
+        }
+        onTick();
+      });
       audio.addEventListener("pause", onTick);
       audio.addEventListener("seeking", onTick);
       audio.addEventListener("seeked", onTick);
@@ -102,17 +122,23 @@ const BUILTIN_SYNCED_LYRICS = {
   }
 
   window.__ymGetActiveAudio = function() {
-    if (window.__ymActiveAudio && !window.__ymActiveAudio.error) {
+    if (window.__ymActiveAudio && !window.__ymActiveAudio.error && isRealAudio(window.__ymActiveAudio)) {
       return window.__ymActiveAudio;
     }
     if (window.__ymKnownAudios && window.__ymKnownAudios.size > 0) {
       for (const a of window.__ymKnownAudios) {
-        if (!a.paused || a.currentTime > 0) return a;
+        if (isRealAudio(a) && (!a.paused || a.currentTime > 0)) return a;
       }
-      const first = window.__ymKnownAudios.values().next().value;
-      if (first) return first;
+      for (const a of window.__ymKnownAudios) {
+        if (isRealAudio(a)) return a;
+      }
     }
-    return document.querySelector("audio") || null;
+    try {
+      const domAudios = Array.from(document.querySelectorAll("audio")).filter(isRealAudio);
+      return domAudios.find((a) => !a.paused) || domAudios[0] || null;
+    } catch(e) {
+      return null;
+    }
   };
 
   try {
@@ -142,7 +168,9 @@ const BUILTIN_SYNCED_LYRICS = {
   try {
     const origPlay = HTMLMediaElement.prototype.play;
     HTMLMediaElement.prototype.play = function (...args) {
-      registerAudio(this);
+      if (isRealAudio(this)) {
+        registerAudio(this);
+      }
       return origPlay.apply(this, args);
     };
   } catch (e) {}
@@ -333,6 +361,10 @@ const BUILTIN_SYNCED_LYRICS = {
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
+  }
+
+  function showNotification(message, type = "info") {
+    showToast(message, type === "info" || type === "success");
   }
 
   function showToast(message, isInfo = false) {
@@ -2488,15 +2520,50 @@ const BUILTIN_SYNCED_LYRICS = {
     let curV = typeof window.__ymCurrentVolume === "number" ? window.__ymCurrentVolume : 1;
     updateVolUI(curV);
 
+    let volHideTimer = null;
+    const showVolPopup = () => {
+      if (volPopup) volPopup.classList.add("open");
+      if (volHideTimer) clearTimeout(volHideTimer);
+      volHideTimer = setTimeout(() => {
+        if (!isDraggingVol) {
+          if (volPopup) volPopup.classList.remove("open");
+        }
+      }, 2200);
+    };
+
+    const hideVolPopup = () => {
+      if (volHideTimer) clearTimeout(volHideTimer);
+      if (volPopup) volPopup.classList.remove("open");
+    };
+
     if (volBtn && volPopup) {
       volBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        const isHidden = volPopup.style.display === "none";
-        volPopup.style.display = isHidden ? "flex" : "none";
-        if (isHidden) {
+        if (volPopup.classList.contains("open")) {
+          hideVolPopup();
+        } else {
+          showVolPopup();
           const v = typeof window.__ymCurrentVolume === "number" ? window.__ymCurrentVolume : 1;
           updateVolUI(v);
         }
+      });
+
+      const volumeEls = [volBtn, volWrap, volPopup].filter(Boolean);
+      volumeEls.forEach((el) => {
+        el.addEventListener("wheel", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const delta = e.deltaY < 0 ? 0.05 : -0.05;
+          const cur = typeof window.__ymCurrentVolume === "number" ? window.__ymCurrentVolume : 1;
+          const targetV = Math.max(0, Math.min(1, Math.round((cur + delta) * 100) / 100));
+          updateVolUI(targetV);
+          window.__ymCurrentVolume = targetV;
+          try { localStorage.setItem("ym_mod_volume", String(targetV)); } catch (err) {}
+          const audio = getActiveAudioElement();
+          if (audio) audio.volume = targetV;
+          handlePlayerAction("setVolume", { volume: targetV });
+          showVolPopup();
+        }, { passive: false });
       });
     }
 
@@ -2516,11 +2583,13 @@ const BUILTIN_SYNCED_LYRICS = {
         audio.volume = ratio;
       }
       handlePlayerAction("setVolume", { volume: ratio });
+      showVolPopup();
     };
 
     if (volWrap) {
       volWrap.addEventListener("mousedown", (e) => {
         isDraggingVol = true;
+        showVolPopup();
         setVolumeFromMouseY(e.clientY);
       });
     }
@@ -2532,13 +2601,16 @@ const BUILTIN_SYNCED_LYRICS = {
     });
 
     window.addEventListener("mouseup", () => {
-      isDraggingVol = false;
+      if (isDraggingVol) {
+        isDraggingVol = false;
+        showVolPopup();
+      }
     });
 
     document.addEventListener("click", (e) => {
-      if (volPopup && volPopup.style.display !== "none") {
+      if (volPopup && volPopup.classList.contains("open")) {
         if (!volPopup.contains(e.target) && e.target !== volBtn && !volBtn?.contains(e.target)) {
-          volPopup.style.display = "none";
+          hideVolPopup();
         }
       }
     });
@@ -2592,11 +2664,22 @@ const BUILTIN_SYNCED_LYRICS = {
 
   
   function getActiveAudioElement() {
+    const isRealAudio = (el) => {
+      if (!el) return false;
+      if (el.id === "ym-live-wallpaper-video") return false;
+      if (el.tagName && el.tagName.toLowerCase() === "video") return false;
+      return true;
+    };
     if (typeof window.__ymGetActiveAudio === "function") {
       const a = window.__ymGetActiveAudio();
-      if (a) return a;
+      if (a && isRealAudio(a)) return a;
     }
-    return document.querySelector("audio") || null;
+    try {
+      const audios = Array.from(document.querySelectorAll("audio")).filter(isRealAudio);
+      return audios.find((a) => !a.paused) || audios[0] || null;
+    } catch(e) {
+      return null;
+    }
   }
 
   function syncLikeStatusUI() {
@@ -2666,37 +2749,50 @@ const BUILTIN_SYNCED_LYRICS = {
     } catch (e) {}
   }
 
+  let lastActiveLyricTime = 0;
   function updateFullscreenLyricsActiveLine(currentTime) {
     if (!fsLyricsVisible || miniPlayerMode !== "lyrics") return;
     const body = document.getElementById("ym-am-lyrics-body");
     if (!body || !currentParsedLyrics.length) return;
 
-    // Bulletproof binary-free linear pass for exact current line
+    // Detect manual user seek (large jump in time)
+    const isSeek = Math.abs(currentTime - lastActiveLyricTime) > 2.0;
+    lastActiveLyricTime = currentTime;
+
     let activeIdx = -1;
     for (let i = 0; i < currentParsedLyrics.length; i++) {
       const line = currentParsedLyrics[i];
-      if (line.time >= 0 && line.time <= (currentTime + 0.35)) {
+      if (line.time >= 0 && line.time <= (currentTime + 0.25)) {
         activeIdx = i;
-      } else if (line.time > (currentTime + 0.35)) {
+      } else if (line.time > (currentTime + 0.25)) {
         break;
       }
     }
 
+    // Monotonic stability: prevent oscillating backward due to small interval drift unless user actually seeked
+    if (!isSeek && lastActiveLyricIdx >= 0 && activeIdx < lastActiveLyricIdx && (lastActiveLyricIdx - activeIdx) <= 2) {
+      activeIdx = lastActiveLyricIdx;
+    }
+
     if (activeIdx !== -1 && activeIdx !== lastActiveLyricIdx) {
+      const prevEl = body.querySelector(`.ym-am-lrc-line[data-idx="${lastActiveLyricIdx}"]`);
+      if (prevEl) {
+        prevEl.className = "ym-am-lrc-line ym-am-lrc-past";
+      }
+
       lastActiveLyricIdx = activeIdx;
-      const lines = body.querySelectorAll(".ym-am-lrc-line");
-      lines.forEach((l, idx) => {
-        if (idx === activeIdx) {
-          l.className = "ym-am-lrc-line ym-am-lrc-active";
-          if (!isUserScrolling) {
-            l.scrollIntoView({ behavior: "smooth", block: "center" });
-          }
-        } else if (idx < activeIdx) {
-          l.className = "ym-am-lrc-line ym-am-lrc-past";
-        } else {
-          l.className = "ym-am-lrc-line ym-am-lrc-future";
+      const activeEl = body.querySelector(`.ym-am-lrc-line[data-idx="${activeIdx}"]`);
+      if (activeEl) {
+        activeEl.className = "ym-am-lrc-line ym-am-lrc-active";
+        if (!isUserScrolling) {
+          const containerHeight = body.clientHeight;
+          const targetTop = activeEl.offsetTop - (containerHeight / 2) + (activeEl.clientHeight / 2);
+          body.scrollTo({
+            top: Math.max(0, targetTop),
+            behavior: "smooth",
+          });
         }
-      });
+      }
     }
   }
 
@@ -2743,7 +2839,7 @@ const BUILTIN_SYNCED_LYRICS = {
   // ==========================================
   // v1.3.2: AUTO-UPDATER & COMMUNITY STATS
   // ==========================================
-  const CURRENT_MOD_VERSION = "v1.3.13";
+  const CURRENT_MOD_VERSION = "v1.4.0";
 
   async function checkModUpdates() {
     try {
@@ -2930,7 +3026,7 @@ const BUILTIN_SYNCED_LYRICS = {
       // Refresh admin tab if visible
       loadAdminProposals();
 
-      const bodyText = `${desc}\n\n---\n**Контакт автора:** ${contact || "Не указан"}\n**Версия мода:** v1.3.5`;
+      const bodyText = `${desc}\n\n---\n**Контакт автора:** ${contact || "Не указан"}\n**Версия мода:** v1.4.0`;
       const issueUrl = `https://github.com/velqor1/Mod-Yandex-Music/issues/new?title=${encodeURIComponent("[Идея] " + title)}&body=${encodeURIComponent(bodyText)}&labels=suggestion`;
 
       try {
@@ -3723,26 +3819,28 @@ const BUILTIN_SYNCED_LYRICS = {
     if (port) {
       return `http://127.0.0.1:${port}/stream?file=${encodeURIComponent(filePath)}`;
     }
-    return `ym-media://${encodeURIComponent(filePath)}`;
+    return "";
   }
 
 
-  function initLiveWallpaper() {
-    if (document.getElementById("ym-live-wallpaper-container")) return;
-
-    const container = document.createElement("div");
-    container.id = "ym-live-wallpaper-container";
-    container.innerHTML = `
-      <video id="ym-live-wallpaper-video" loop muted playsinline autoplay style="display:none;"></video>
-      <canvas id="ym-live-wallpaper-canvas" style="display:none;"></canvas>
-      <img id="ym-live-wallpaper-image" style="display:none;" />
-      <div id="ym-live-wallpaper-overlay"></div>
-    `;
-    if (document.body.firstChild) {
-      document.body.insertBefore(container, document.body.firstChild);
-    } else {
+  function ensureLiveWallpaperContainer() {
+    let container = document.getElementById("ym-live-wallpaper-container");
+    if (!container && document.body) {
+      container = document.createElement("div");
+      container.id = "ym-live-wallpaper-container";
+      container.innerHTML = `
+        <video id="ym-live-wallpaper-video" loop muted playsinline autoplay style="display:none;"></video>
+        <canvas id="ym-live-wallpaper-canvas" style="display:none;"></canvas>
+        <img id="ym-live-wallpaper-image" style="display:none;" />
+        <div id="ym-live-wallpaper-overlay"></div>
+      `;
       document.body.appendChild(container);
     }
+    return container;
+  }
+
+  function initLiveWallpaper() {
+    ensureLiveWallpaperContainer();
 
     // Download listeners from VSThemes window
     if (window.yandexMusicMod && window.yandexMusicMod.onWallpaperDownloadStarted) {
@@ -3825,15 +3923,35 @@ const BUILTIN_SYNCED_LYRICS = {
       }
     });
 
+    // Fallback click listener so user interaction instantly resumes video if blocked
+    window.addEventListener("click", () => {
+      const vid = document.getElementById("ym-live-wallpaper-video");
+      if (vid && vid.paused && modSettings["wallpaper/enabled"] && vid.src) {
+        vid.play().catch(() => {});
+      }
+    }, { passive: true });
+
+    // Periodic guard to ensure ym-has-live-wallpaper class persists
+    setInterval(() => {
+      if (modSettings["wallpaper/enabled"] && (modSettings["wallpaper/url"] || modSettings["wallpaper/source"])) {
+        if (document.body && !document.body.classList.contains("ym-has-live-wallpaper")) {
+          document.body.classList.add("ym-has-live-wallpaper");
+        }
+        if (document.documentElement && !document.documentElement.classList.contains("ym-has-live-wallpaper")) {
+          document.documentElement.classList.add("ym-has-live-wallpaper");
+        }
+      }
+    }, 600);
+
     applyLiveWallpaperSettings();
   }
 
   function applyLiveWallpaperSettings() {
-    const container = document.getElementById("ym-live-wallpaper-container");
+    const container = ensureLiveWallpaperContainer();
     if (!container) return;
 
     const isEnabled = !!modSettings["wallpaper/enabled"];
-    const opacity = modSettings["wallpaper/opacity"] !== undefined ? modSettings["wallpaper/opacity"] : 55;
+    const opacity = modSettings["wallpaper/opacity"] !== undefined ? modSettings["wallpaper/opacity"] : 45;
     const blur = modSettings["wallpaper/blur"] !== undefined ? modSettings["wallpaper/blur"] : 0;
     const activeUrl = modSettings["wallpaper/url"] || modSettings["wallpaper/source"] || "";
     let activeType = modSettings["wallpaper/type"] || "video";
@@ -3849,9 +3967,14 @@ const BUILTIN_SYNCED_LYRICS = {
     container.style.setProperty("--ym-wallpaper-opacity", (opacity / 100).toFixed(2));
     container.style.setProperty("--ym-wallpaper-blur", `${blur}px`);
 
+    let forceStyle = document.getElementById("ym-wallpaper-force-transparency");
+
     if (!isEnabled || !activeUrl) {
       document.documentElement.classList.remove("ym-has-live-wallpaper");
       document.body.classList.remove("ym-has-live-wallpaper");
+      container.classList.remove("ym-active");
+      container.style.display = "none";
+      if (forceStyle) forceStyle.remove();
       stopCanvasWallpaper();
       const vid = document.getElementById("ym-live-wallpaper-video");
       if (vid) {
@@ -3866,8 +3989,135 @@ const BUILTIN_SYNCED_LYRICS = {
       return;
     }
 
+    // Active
     document.documentElement.classList.add("ym-has-live-wallpaper");
     document.body.classList.add("ym-has-live-wallpaper");
+    container.classList.add("ym-active");
+    container.style.display = "block";
+    container.style.opacity = "1";
+
+    if (!forceStyle) {
+      forceStyle = document.createElement("style");
+      forceStyle.id = "ym-wallpaper-force-transparency";
+      forceStyle.textContent = `
+        html, body, #root, #__next {
+          background: transparent !important;
+          background-color: transparent !important;
+        }
+        /* Completely transparent left sidebar */
+        aside, [data-test-id="NAVBAR"], [class*="DefaultLayout_navbar"], [class*="Navbar_root"], [class*="NavbarDesktop_root"], [class*="SideNavigation_root"], [class*="Navigation_root"], nav, .ym-mod-sidebar-container {
+          background: transparent !important;
+          background-color: transparent !important;
+          backdrop-filter: none !important;
+          -webkit-backdrop-filter: none !important;
+          border-right: 1px solid rgba(255, 255, 255, 0.06) !important;
+          box-shadow: none !important;
+        }
+        aside::before, aside::after, [data-test-id="NAVBAR"]::before, [data-test-id="NAVBAR"]::after, [class*="DefaultLayout_navbar"]::before, [class*="DefaultLayout_navbar"]::after {
+          display: none !important;
+          background: transparent !important;
+          background-color: transparent !important;
+          background-image: none !important;
+          box-shadow: none !important;
+        }
+        aside *, [data-test-id="NAVBAR"] *, [class*="Navbar_root"] *, [class*="DefaultLayout_navbar"] *, [class*="NavbarDesktop_root"] *, [class*="NavbarDesktop_"] *, nav * {
+          background: transparent !important;
+          background-color: transparent !important;
+          box-shadow: none !important;
+        }
+        /* Completely hide glowing Vibe animation blob */
+        [class*="VibePage_vibeAnimation"],
+        [class*="VibeBlock_vibeAnimation"],
+        [class*="vibeAnimation"],
+        [class*="VibeAnimation_"],
+        [class*="VibeAnimation_"] *,
+        [class*="VibeAnimation_"] canvas,
+        [class*="VibeWidgetAnimation_"],
+        [class*="VibeWidgetAnimation_"] *,
+        [class*="VibeWidgetAnimation_"] canvas,
+        [class*="vibeAnimation"] canvas,
+        [class*="VibePage_bigCardPanelBackground"],
+        [class*="VibePage_bigCardPanelBackground"]::before,
+        [class*="VibePage_bigCardPanelBackground"]::after {
+          display: none !important;
+          opacity: 0 !important;
+          visibility: hidden !important;
+          pointer-events: none !important;
+        }
+        :root, html, body {
+          --ym-background-color-primary-enabled-basic: transparent !important;
+          --ym-background-color-primary-enabled-content: transparent !important;
+          --ym-layout-background-color: transparent !important;
+          --vibe-gradient-stop-0: transparent !important;
+          --vibe-gradient-stop-1: transparent !important;
+          --vibe-gradient-stop-2: transparent !important;
+          --vibe-gradient-stop-3: transparent !important;
+          --vibe-gradient-stop-4: transparent !important;
+          --vibe-gradient-stop-5: transparent !important;
+          --vibe-gradient-stop-6: transparent !important;
+          --vibe-gradient-stop-7: transparent !important;
+          --vibe-gradient-stop-8: transparent !important;
+          --vibe-gradient-stop-9: transparent !important;
+          --vibe-gradient-stop-10: transparent !important;
+          --vibe-gradient-stop-11: transparent !important;
+          --vibe-gradient-stop-12: transparent !important;
+          --vibe-gradient-stop-13: transparent !important;
+          --vibe-gradient-stop-14: transparent !important;
+          --vibe-gradient-stop-15: transparent !important;
+        }
+        [class*="CommonLayout_root"],
+        [class*="MainLayout_root"],
+        [class*="DefaultLayout_root"],
+        [class*="DefaultLayout_rootNewVibe"],
+        [class*="Page_root"],
+        [class*="MainPage_root"],
+        [class*="Content_root"],
+        [class*="Content_main"],
+        [class*="Desktop_root"],
+        [class*="ApplicationDesktop_root"],
+        [class*="WithTopBanner_root"],
+        [class*="WithTopBanner_content"],
+        [class*="RootLayout_root"],
+        [class*="layout_root"],
+        main,
+        section[class*="MainLayout_content"],
+        [class*="CollectionPage_"],
+        [class*="ArtistPage_"],
+        [class*="AlbumPage_"],
+        [class*="PlaylistPage_"],
+        [class*="SearchPage_"],
+        [class*="ScrollContainer_"],
+        [class*="VibePage_"],
+        [class*="VibePage_"]::before,
+        [class*="VibePage_"]::after,
+        [class*="Vibe_"],
+        [class*="Vibe_"]::before,
+        [class*="Vibe_"]::after,
+        [class*="WheelDesktop_"],
+        [class*="WheelDesktop_"]::before,
+        [class*="WheelDesktop_"]::after,
+        [class*="VibeLayout"],
+        [class*="VibeLayout"]::before,
+        [class*="VibeLayout"]::after,
+        [class*="bigCardPanelBackground"],
+        [class*="bigCardPanelBackground"]::before,
+        [class*="bigCardPanelBackground"]::after,
+        [class*="VibeAnimation_root"],
+        [class*="VibeAnimation_root"]::before,
+        [class*="VibeAnimation_root"]::after,
+        [class*="VibeAnimation_root"] div,
+        [class*="VibeAnimation_root"] div::before,
+        div[data-test-id="VIBE_PAGE"],
+        div[data-test-id="VIBE_BLOCK"],
+        div[data-test-id="FULLSCREEN_PLAYER_MODAL"] {
+          background: transparent !important;
+          background-color: transparent !important;
+          background-image: none !important;
+          box-shadow: none !important;
+        }
+      `;
+      document.head.appendChild(forceStyle);
+    }
 
     const vid = document.getElementById("ym-live-wallpaper-video");
     const img = document.getElementById("ym-live-wallpaper-image");
@@ -3888,7 +4138,7 @@ const BUILTIN_SYNCED_LYRICS = {
       if (img) {
         img.style.display = "block";
         const imgUrl = toMediaUrl(activeUrl);
-        if (img.src !== imgUrl) img.src = imgUrl;
+        if (imgUrl && img.src !== imgUrl) img.src = imgUrl;
       }
     } else {
       // Video
@@ -3902,20 +4152,36 @@ const BUILTIN_SYNCED_LYRICS = {
         vid.autoplay = true;
         vid.loop = true;
         vid.playsInline = true;
+        vid.setAttribute("muted", "");
+        vid.setAttribute("autoplay", "");
+        vid.setAttribute("playsinline", "");
+        vid.setAttribute("loop", "");
 
         const streamUrl = toMediaUrl(activeUrl);
-        if (vid.src !== streamUrl) {
-          vid.src = streamUrl;
-          vid.load();
+        if (streamUrl) {
+          if (vid.src !== streamUrl) {
+            vid.src = streamUrl;
+            vid.load();
+          }
+          const p = vid.play();
+          if (p && typeof p.then === "function") {
+            p.catch((err) => {
+              console.warn("[Wallpaper Video] Play error:", err);
+              vid.muted = true;
+              vid.play().catch(() => {});
+            });
+          }
+        } else {
+          if (window.yandexMusicMod && window.yandexMusicMod.getMediaServerPort) {
+            window.yandexMusicMod.getMediaServerPort().then((p) => {
+              if (p) {
+                cachedMediaServerPort = p;
+                window.__ymMediaServerPort = p;
+                applyLiveWallpaperSettings();
+              }
+            }).catch(() => {});
+          }
         }
-        vid.play().catch((err) => {
-          console.warn("[Wallpaper Video] Play error:", err);
-          const retryPlay = () => {
-            vid.play().catch(() => {});
-            window.removeEventListener("click", retryPlay);
-          };
-          window.addEventListener("click", retryPlay, { once: true });
-        });
       }
     }
   }
@@ -4295,7 +4561,7 @@ const BUILTIN_SYNCED_LYRICS = {
 
             <div class="ym-modal-title">Настройки Мода</div>
 
-            <div class="ym-modal-version">v1.3.13 (YM 5.124.1)</div>
+            <div class="ym-modal-version">v1.4.0 (YM 5.124.1)</div>
 
           </div>
 
@@ -5870,7 +6136,7 @@ const BUILTIN_SYNCED_LYRICS = {
     const modalLogo = backdrop.querySelector(".ym-modal-logo");
     if (modalLogo) {
       modalLogo.style.cursor = "pointer";
-      modalLogo.title = "Версия v1.3.5";
+      modalLogo.title = "Версия v1.4.0";
       modalLogo.addEventListener("click", () => {
         logoClicks++;
         clearTimeout(logoTimer);
@@ -6967,7 +7233,7 @@ const BUILTIN_SYNCED_LYRICS = {
 
           <span class="ym-mod-btn-text">Настройки Мода</span>
 
-          <span class="ym-mod-ver-tag">v1.3.13</span>
+          <span class="ym-mod-ver-tag">v1.4.0</span>
 
         `;
 
@@ -7191,6 +7457,7 @@ const BUILTIN_SYNCED_LYRICS = {
     let position = 0;
 
     let liked = false;
+    let disliked = false;
 
     let isPlaying = false;
 
@@ -7232,12 +7499,21 @@ const BUILTIN_SYNCED_LYRICS = {
 
     // 2. Audio Elements (Precise position, duration, and playing state)
     let activeAudio = null;
+    const isRealAudio = (el) => {
+      if (!el) return false;
+      if (el.id === "ym-live-wallpaper-video") return false;
+      if (el.tagName && el.tagName.toLowerCase() === "video") return false;
+      return true;
+    };
     if (typeof window.__ymGetActiveAudio === "function") {
-      activeAudio = window.__ymGetActiveAudio();
+      const a = window.__ymGetActiveAudio();
+      if (a && isRealAudio(a)) activeAudio = a;
     }
     if (!activeAudio) {
-      const audios = Array.from(document.querySelectorAll("audio"));
-      activeAudio = audios.find((a) => !a.paused) || audios[0];
+      try {
+        const audios = Array.from(document.querySelectorAll("audio")).filter(isRealAudio);
+        activeAudio = audios.find((a) => !a.paused) || audios[0];
+      } catch(e) {}
     }
     if (activeAudio) {
       if (!isPlaying) isPlaying = !activeAudio.paused;
@@ -7319,10 +7595,8 @@ const BUILTIN_SYNCED_LYRICS = {
 
         }
 
-        if (sonata.position !== undefined && typeof sonata.position === "number") {
-
-          position = Math.floor(sonata.position);
-
+        if ((!position || position === 0) && sonata.position !== undefined && typeof sonata.position === "number") {
+          position = sonata.position;
         }
 
         if (sonata.duration !== undefined && typeof sonata.duration === "number" && (!duration || duration === 0)) {
@@ -7525,7 +7799,6 @@ const BUILTIN_SYNCED_LYRICS = {
 
 
     // 8. Like and Dislike status
-    let disliked = false;
     if (rawMeta) {
       if (typeof rawMeta.liked === "boolean") liked = rawMeta.liked;
       if (typeof rawMeta.isLiked === "boolean") liked = rawMeta.isLiked;
@@ -7533,56 +7806,47 @@ const BUILTIN_SYNCED_LYRICS = {
     }
 
     const activeLikeBtn = findActivePlayerLikeButton();
-    if (activeLikeBtn && isButtonActive(activeLikeBtn)) {
+    if (activeLikeBtn && !isDislikeButton(activeLikeBtn) && isButtonActive(activeLikeBtn)) {
       liked = true;
+      disliked = false;
     }
 
     const activeDislikeBtn = findActivePlayerDislikeButton();
-    if (activeDislikeBtn && isButtonActive(activeDislikeBtn)) {
+    if (activeDislikeBtn && isDislikeButton(activeDislikeBtn) && isButtonActive(activeDislikeBtn)) {
       disliked = true;
+      liked = false;
     }
 
-    // 9. Volume extraction (Yandex Music uses Sonata / React Fiber, not audio.volume)
-    let volume = 1.0;
+    // 9. Volume extraction (Direct Sonata Context, Mod Volume & Audio Elements)
+    let volume = typeof window.__ymCurrentVolume === "number" ? window.__ymCurrentVolume : 1.0;
     let muted = false;
 
-    // A. Read from CHANGE_VOLUME_SLIDER React Fiber
-    const sliderEl = document.querySelector('[data-test-id="CHANGE_VOLUME_SLIDER"]');
-    if (sliderEl) {
-      const sp = searchFiberProperty(sliderEl, "value");
-      if (sp && typeof sp.value === "number") {
-        volume = sp.value;
+    const sonata = findSonataPlayer();
+    if (sonata) {
+      const sVol = sonata.playbackState?.playerState?.volume?.value ?? sonata.state?.volume?.value;
+      if (typeof sVol === "number" && !isNaN(sVol)) {
+        volume = sVol;
         window.__ymCurrentVolume = volume;
       }
-    }
-
-    // B. Read from CHANGE_VOLUME_BUTTON or sonataVolume
-    if (volume === 1.0) {
-      const volBtn = document.querySelector('[data-test-id="CHANGE_VOLUME_BUTTON"]');
-      if (volBtn) {
-        const bp = searchFiberProperty(volBtn, "sonataVolume");
-        if (bp && typeof bp.sonataVolume === "number") {
-          volume = bp.sonataVolume;
-          window.__ymCurrentVolume = volume;
-        }
-      }
-    }
-
-    // C. Read from persistent mod volume
-    if (typeof window.__ymCurrentVolume === "number") {
-      volume = window.__ymCurrentVolume;
     } else {
-      try {
-        const savedV = localStorage.getItem("ym_mod_volume");
-        if (savedV !== null) {
-          volume = parseFloat(savedV);
+      const activeAud = (typeof window.__ymGetActiveAudio === "function" ? window.__ymGetActiveAudio() : null) || (typeof getActiveAudioElement === "function" ? getActiveAudioElement() : null);
+      if (activeAud && typeof activeAud.volume === "number") {
+        if (typeof window.__ymCurrentVolume !== "number") {
+          volume = activeAud.volume;
           window.__ymCurrentVolume = volume;
         }
-      } catch (e) {}
-    }
-
-    if (activeAudio) {
-      muted = !!activeAudio.muted;
+        muted = !!activeAud.muted;
+      } else if (typeof window.__ymCurrentVolume === "number") {
+        volume = window.__ymCurrentVolume;
+      } else {
+        try {
+          const savedV = localStorage.getItem("ym_mod_volume");
+          if (savedV !== null) {
+            volume = parseFloat(savedV);
+            window.__ymCurrentVolume = volume;
+          }
+        } catch (e) {}
+      }
     }
 
     if (!title && window.__lastPlayerState && window.__lastPlayerState.track && window.__lastPlayerState.track.title) {
@@ -7600,7 +7864,9 @@ const BUILTIN_SYNCED_LYRICS = {
         artists,
         coverUrl,
         liked,
+        isLiked: liked,
         disliked,
+        isDisliked: disliked,
         rawMeta,
       },
       progress: {
@@ -7617,7 +7883,92 @@ const BUILTIN_SYNCED_LYRICS = {
 
 
 
+  function isDislikeButton(el) {
+    if (!el) return false;
+    const tid = (el.getAttribute("data-test-id") || "").toLowerCase();
+    if (tid.includes("dislike")) return true;
+    const aria = (el.getAttribute("aria-label") || "").toLowerCase();
+    if (aria.includes("не нравится") || aria.includes("дизлайк") || aria.includes("dislike")) return true;
+    return false;
+  }
+
+  function isLikeButton(el) {
+    if (!el || isDislikeButton(el)) return false;
+    const tid = (el.getAttribute("data-test-id") || "").toLowerCase();
+    if (tid === "like_button" || tid.endsWith("_like_button") || tid.includes("playerbar_like_button")) return true;
+    const aria = (el.getAttribute("aria-label") || "").toLowerCase();
+    if (aria.includes("нравится") && !aria.includes("не нравится")) return true;
+    if (aria.includes("в любимые") || aria.includes("из любимых") || aria.includes("фонотек") || aria.includes("коллекци")) return true;
+    return false;
+  }
+
+  function findSonataPlayer() {
+    const seeds = [
+      document.querySelector('[data-test-id="CHANGE_VOLUME_BUTTON"]'),
+      document.querySelector('section[data-test-id="PLAYERBAR_DESKTOP"]'),
+      document.querySelector('[data-test-id="VIBE_PLAYERBAR"]'),
+      document.querySelector('footer'),
+      document.body
+    ].filter(Boolean);
+
+    for (const el of seeds) {
+      const fiberKey = Object.keys(el).find((k) => k.startsWith("__reactFiber$") || k.startsWith("__reactInternalInstance$"));
+      if (!fiberKey || !el[fiberKey]) continue;
+      let node = el[fiberKey];
+      for (let depth = 0; depth < 60 && node; depth++) {
+        const p = node.memoizedProps;
+        if (p) {
+          if (p.sonata && typeof p.sonata.setExponentVolume === "function") return p.sonata;
+          if (typeof p.setExponentVolume === "function") return p;
+          if (p.mediaController && typeof p.mediaController.setExponentVolume === "function") return p;
+        }
+
+        if (node.dependencies) {
+          let curContext = node.dependencies.firstContext;
+          while (curContext) {
+            const val = curContext.memoizedValue;
+            if (val) {
+              if (typeof val.setExponentVolume === "function") return val;
+              if (val.mediaController && typeof val.mediaController.setExponentVolume === "function") return val;
+            }
+            curContext = curContext.next;
+          }
+        }
+
+        let hook = node.memoizedState;
+        while (hook) {
+          const val = hook.memoizedState;
+          if (val) {
+            if (typeof val.setExponentVolume === "function") return val;
+            if (val.mediaController && typeof val.mediaController.setExponentVolume === "function") return val;
+          }
+          hook = hook.next;
+        }
+
+        node = node.return;
+      }
+    }
+    return null;
+  }
+
   function findActivePlayerLikeButton() {
+    // 1. Strict specific selectors (can NEVER match dislike)
+    const directSelectors = [
+      'section[data-test-id="PLAYERBAR_DESKTOP"] button[data-test-id="LIKE_BUTTON"]',
+      '[data-test-id="VIBE_PLAYERBAR"] button[data-test-id="LIKE_BUTTON"]',
+      '[data-test-id="FULLSCREEN_PLAYER_MODAL"] button[data-test-id="LIKE_BUTTON"]',
+      '[data-test-id="VIBE_BLOCK"] button[data-test-id="LIKE_BUTTON"]',
+      'footer button[data-test-id="LIKE_BUTTON"]',
+      'button[data-test-id="LIKE_BUTTON"]',
+      'button[data-test-id="PLAYERBAR_LIKE_BUTTON"]'
+    ];
+
+    for (const sel of directSelectors) {
+      const btn = document.querySelector(sel);
+      if (btn && !isDislikeButton(btn)) return btn;
+    }
+
+    // 2. Safe scan inside containers
     const activePlayerContainers = [
       document.querySelector('[data-test-id="VIBE_PLAYERBAR"]'),
       document.querySelector('section[data-test-id="PLAYERBAR_DESKTOP"]'),
@@ -7627,17 +7978,31 @@ const BUILTIN_SYNCED_LYRICS = {
     ].filter(Boolean);
 
     for (const container of activePlayerContainers) {
-      const btn = container.querySelector(
-        'button[data-test-id="LIKE_BUTTON"], button[data-test-id*="LIKE" i], button[aria-label*="любим" i], button[aria-label*="нравится" i], button[aria-label*="like" i]'
-      );
-      if (btn) return btn;
+      const allButtons = container.querySelectorAll("button");
+      for (const btn of allButtons) {
+        if (isLikeButton(btn)) return btn;
+      }
     }
-    return document.querySelector(
-      'section[data-test-id="PLAYERBAR_DESKTOP"] button[data-test-id*="LIKE" i], [data-test-id="VIBE_PLAYERBAR"] button[data-test-id*="LIKE" i]'
-    );
+
+    return null;
   }
 
   function findActivePlayerDislikeButton() {
+    const directSelectors = [
+      'section[data-test-id="PLAYERBAR_DESKTOP"] button[data-test-id="DISLIKE_BUTTON"]',
+      '[data-test-id="VIBE_PLAYERBAR"] button[data-test-id="DISLIKE_BUTTON"]',
+      '[data-test-id="FULLSCREEN_PLAYER_MODAL"] button[data-test-id="DISLIKE_BUTTON"]',
+      '[data-test-id="VIBE_BLOCK"] button[data-test-id="DISLIKE_BUTTON"]',
+      'footer button[data-test-id="DISLIKE_BUTTON"]',
+      'button[data-test-id="DISLIKE_BUTTON"]',
+      'button[data-test-id="PLAYERBAR_DISLIKE_BUTTON"]'
+    ];
+
+    for (const sel of directSelectors) {
+      const btn = document.querySelector(sel);
+      if (btn && isDislikeButton(btn)) return btn;
+    }
+
     const activePlayerContainers = [
       document.querySelector('[data-test-id="VIBE_PLAYERBAR"]'),
       document.querySelector('section[data-test-id="PLAYERBAR_DESKTOP"]'),
@@ -7647,35 +8012,34 @@ const BUILTIN_SYNCED_LYRICS = {
     ].filter(Boolean);
 
     for (const container of activePlayerContainers) {
-      const btn = container.querySelector(
-        'button[data-test-id="DISLIKE_BUTTON"], button[data-test-id*="DISLIKE" i], button[aria-label*="не нравится" i], button[aria-label*="дизлайк" i], button[aria-label*="dislike" i]'
-      );
-      if (btn) return btn;
+      const allButtons = container.querySelectorAll("button");
+      for (const btn of allButtons) {
+        if (isDislikeButton(btn)) return btn;
+      }
     }
-    return document.querySelector(
-      'section[data-test-id="PLAYERBAR_DESKTOP"] button[data-test-id*="DISLIKE" i], [data-test-id="VIBE_PLAYERBAR"] button[data-test-id*="DISLIKE" i]'
-    );
+
+    return null;
   }
 
   function isButtonActive(btn) {
     if (!btn) return false;
-    const ariaLabel = (btn.getAttribute("aria-label") || "").toLowerCase();
-    const isDelete = ariaLabel.includes("удалить") || ariaLabel.includes("из любимых") || ariaLabel.includes("из коллекции") || ariaLabel.includes("убрать");
     const ariaChecked = btn.getAttribute("aria-checked") === "true" || btn.getAttribute("aria-pressed") === "true";
-    const hasActiveClass = btn.className.includes("likeButton_active") || btn.className.includes("active") || btn.classList.contains("liked") || btn.classList.contains("disliked");
-    const hasActiveChild = !!btn.querySelector('[class*="active" i], [class*="liked" i], [class*="filled" i]');
+    const dataState = btn.getAttribute("data-state") === "selected" || btn.dataset?.state === "selected" || btn.getAttribute("data-selected") === "true";
+    const hasActiveClass = btn.className.includes("likeButton_active") || btn.className.includes("Like_active") || btn.className.includes("active") || btn.classList.contains("liked");
+    const hasActiveChild = !!btn.querySelector('[class*="active" i], [class*="liked" i], [class*="filled" i], [class*="Like_active" i]');
     const pathFilled = Array.from(btn.querySelectorAll("path, svg")).some((el) => {
-      const f = el.getAttribute("fill");
+      const f = (el.getAttribute("fill") || "").toLowerCase();
       return f && f !== "none" && f !== "transparent" && f !== "currentColor";
     });
+    const redSvg = !!btn.querySelector('svg[fill="#ef4444"], svg[fill="#fc3f1d"], svg[fill="red"], path[fill="#ef4444"], path[fill="#fc3f1d"], path[fill="red"]');
     let fiberActive = false;
     try {
       const fiberKey = Object.keys(btn).find((k) => k.startsWith("__reactFiber$") || k.startsWith("__reactInternalInstance$"));
       if (fiberKey && btn[fiberKey]) {
         let node = btn[fiberKey];
-        for (let i = 0; i < 5 && node; i++) {
+        for (let i = 0; i < 8 && node; i++) {
           const p = node.memoizedProps;
-          if (p && (p.isLiked === true || p.liked === true || p.checked === true || p.active === true || p.isDisliked === true || p.disliked === true)) {
+          if (p && (p.isLiked === true || p.liked === true || p.checked === true || p.active === true || p.selected === true || p.isSelected === true)) {
             fiberActive = true;
             break;
           }
@@ -7684,7 +8048,7 @@ const BUILTIN_SYNCED_LYRICS = {
       }
     } catch (_) {}
 
-    return isDelete || ariaChecked || hasActiveClass || hasActiveChild || pathFilled || fiberActive;
+    return ariaChecked || dataState || hasActiveClass || hasActiveChild || pathFilled || redSvg || fiberActive;
   }
 
   function observePlayer() {
@@ -7832,29 +8196,78 @@ const BUILTIN_SYNCED_LYRICS = {
       } else {
         window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", code: "ArrowLeft", ctrlKey: true, bubbles: true }));
       }
-    } else if (action === "like") {
+    } else if (action === "like" || action === "toggleLike") {
       const likeBtn = findActivePlayerLikeButton();
-      if (likeBtn) triggerClick(likeBtn);
+      if (likeBtn && !isDislikeButton(likeBtn)) {
+        let fiberInvoked = false;
+        try {
+          const props = searchFiberProperty(likeBtn, "onClick");
+          if (props && typeof props.onClick === "function") {
+            props.onClick({ stopPropagation: () => {}, preventDefault: () => {} });
+            fiberInvoked = true;
+          }
+        } catch(e) {}
+
+        if (!fiberInvoked) {
+          triggerClick(likeBtn);
+        }
+      }
+
+      setTimeout(() => {
+        try {
+          const s = scrapeCurrentPlayerState();
+          if (s && window.yandexMusicMod?.updatePlayerState) {
+            window.yandexMusicMod.updatePlayerState(s);
+          }
+        } catch (e) {}
+      }, 200);
     } else if (action === "dislike") {
       const dislikeBtn = findActivePlayerDislikeButton();
-      if (dislikeBtn) triggerClick(dislikeBtn);
+      if (dislikeBtn && isDislikeButton(dislikeBtn)) {
+        let fiberInvoked = false;
+        try {
+          const props = searchFiberProperty(dislikeBtn, "onClick");
+          if (props && typeof props.onClick === "function") {
+            props.onClick({ stopPropagation: () => {}, preventDefault: () => {} });
+            fiberInvoked = true;
+          }
+        } catch(e) {}
+
+        if (!fiberInvoked) {
+          triggerClick(dislikeBtn);
+        }
+      }
+
+      setTimeout(() => {
+        try {
+          const s = scrapeCurrentPlayerState();
+          if (s && window.yandexMusicMod?.updatePlayerState) {
+            window.yandexMusicMod.updatePlayerState(s);
+          }
+        } catch (e) {}
+      }, 200);
     } else if (action === "setVolume" && payload && typeof payload.volume === "number") {
-      const vol = Math.max(0, Math.min(1, payload.volume));
+      const vol = Math.max(0, Math.min(1, Math.round(payload.volume * 100) / 100));
       window.__ymCurrentVolume = vol;
       try {
         localStorage.setItem("ym_mod_volume", String(vol));
       } catch (e) {}
 
-      // 1. Update HTML5 audio elements
-      const audios = document.querySelectorAll("audio");
-      audios.forEach((a) => {
+      // 1. Native Sonata Player Engine Integration
+      const sonata = findSonataPlayer();
+      if (sonata) {
         try {
-          a.volume = vol;
-          if (vol > 0 && a.muted) a.muted = false;
+          if (typeof sonata.setExponentVolume === "function") {
+            sonata.setExponentVolume(vol);
+          } else if (sonata.mediaController && typeof sonata.mediaController.setExponentVolume === "function") {
+            sonata.mediaController.setExponentVolume(vol);
+          } else if (typeof sonata.setVolume === "function") {
+            sonata.setVolume(vol);
+          }
         } catch (e) {}
-      });
+      }
 
-      // 2. Call React Fiber onChange on CHANGE_VOLUME_SLIDER
+      // 2. React Volume Slider & Button Props
       const sliderEl = document.querySelector('[data-test-id="CHANGE_VOLUME_SLIDER"]');
       if (sliderEl) {
         try {
@@ -7865,16 +8278,51 @@ const BUILTIN_SYNCED_LYRICS = {
         } catch (e) {}
       }
 
-      // 3. Call React Fiber onVolumeSet on CHANGE_VOLUME_BUTTON
       const volBtn = document.querySelector('[data-test-id="CHANGE_VOLUME_BUTTON"]');
       if (volBtn) {
         try {
-          const bp = searchFiberProperty(volBtn, "onVolumeSet") || searchFiberProperty(volBtn, "sonataVolume");
+          const bp = searchFiberProperty(volBtn, "onVolumeSet");
           if (bp && typeof bp.onVolumeSet === "function") {
             bp.onVolumeSet(vol);
           }
         } catch (e) {}
       }
+
+      // 3. Update HTML5 audio elements (active & all known)
+      const activeAud = (typeof window.__ymGetActiveAudio === "function" ? window.__ymGetActiveAudio() : null) || getActiveAudioElement();
+      if (activeAud) {
+        try {
+          activeAud.volume = vol;
+          if (vol > 0 && activeAud.muted) activeAud.muted = false;
+        } catch (e) {}
+      }
+
+      if (window.__ymKnownAudios) {
+        window.__ymKnownAudios.forEach((a) => {
+          try {
+            a.volume = vol;
+            if (vol > 0 && a.muted) a.muted = false;
+          } catch (e) {}
+        });
+      }
+
+      const audios = document.querySelectorAll("audio");
+      audios.forEach((a) => {
+        try {
+          a.volume = vol;
+          if (vol > 0 && a.muted) a.muted = false;
+        } catch (e) {}
+      });
+
+      // 4. Broadcast state immediately back to overlay
+      setTimeout(() => {
+        try {
+          const s = scrapeCurrentPlayerState();
+          if (s && window.yandexMusicMod?.updatePlayerState) {
+            window.yandexMusicMod.updatePlayerState(s);
+          }
+        } catch (e) {}
+      }, 50);
     } else if (action === "toggleMute") {
       const volBtn = document.querySelector('button[data-test-id*="VOLUME"], [data-test-id="VOLUME_BUTTON"]');
       if (volBtn) {

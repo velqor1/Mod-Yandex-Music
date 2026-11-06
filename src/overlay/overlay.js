@@ -1,4 +1,4 @@
-// Apple Music macOS MiniPlayer Overlay Controller (v1.3.13)
+// Apple Music macOS MiniPlayer Overlay Controller (v1.4.0)
 // Real-time 60fps interpolation, 1-in-1 lyrics synchronization, smooth centering scroll, click-to-seek
 
 const isBrowser = typeof window !== "undefined" && typeof document !== "undefined";
@@ -15,6 +15,8 @@ let currentViewMode = "compact"; // "compact" | "lyrics" | "artwork"
 let overlayLyrics = [];
 let overlayLyricsIndex = -1;
 let lyricsTrackKey = "";
+let lastOverlayActiveIdx = -1;
+let lastOverlayActiveTime = 0;
 
 // 60fps interpolation state
 let basePosition = 0;
@@ -82,6 +84,8 @@ try {
 } catch (e) {}
 let isMuted = false;
 let isDraggingVol = false;
+let optimisticLikeUntil = 0;
+let ignoreBackendVolumeUntil = 0;
 
 function normalizeCoverUrl(url) {
   if (!url || typeof url !== "string") return "";
@@ -381,14 +385,25 @@ function renderProgress(pos) {
 function findActiveLyricIndex(pos) {
   if (!overlayLyrics || overlayLyrics.length === 0) return -1;
   const effectivePos = pos + currentTrackOffset;
+
+  // Detect user seek
+  const isSeek = Math.abs(pos - lastOverlayActiveTime) > 1.5;
+  lastOverlayActiveTime = pos;
+
   let activeIdx = -1;
   for (let i = 0; i < overlayLyrics.length; i++) {
-    if (overlayLyrics[i].time <= effectivePos + 0.35) {
+    if (overlayLyrics[i].time <= effectivePos + 0.25) {
       activeIdx = i;
     } else {
       break;
     }
   }
+
+  // Monotonic guard: prevent jumping backward by 1-2 lines due to timer drift unless user actually seeked
+  if (!isSeek && lastOverlayActiveIdx >= 0 && activeIdx < lastOverlayActiveIdx && (lastOverlayActiveIdx - activeIdx) <= 2) {
+    activeIdx = lastOverlayActiveIdx;
+  }
+
   return activeIdx;
 }
 
@@ -417,24 +432,27 @@ function syncLyricsPosition(pos) {
 
   // Update Expanded Scrolling Lyrics
   if (currentViewMode === "lyrics" && activeIdx !== overlayLyricsIndex) {
+    const prevIdx = overlayLyricsIndex;
     overlayLyricsIndex = activeIdx;
+    lastOverlayActiveIdx = activeIdx;
+
     if (lyricsScroll) {
-      const allLines = lyricsScroll.querySelectorAll(".am-lrc-line");
-      allLines.forEach((lineEl, idx) => {
-        if (idx === activeIdx) {
-          lineEl.classList.add("active");
-          // Smooth center scrolling
+      if (prevIdx >= 0) {
+        const prevEl = lyricsScroll.querySelector(`.am-lrc-line[data-idx="${prevIdx}"]`);
+        if (prevEl) prevEl.classList.remove("active");
+      }
+      if (activeIdx >= 0) {
+        const activeEl = lyricsScroll.querySelector(`.am-lrc-line[data-idx="${activeIdx}"]`);
+        if (activeEl) {
+          activeEl.classList.add("active");
           const containerHeight = lyricsScroll.clientHeight;
-          const lineOffsetTop = lineEl.offsetTop;
-          const targetScrollTop = lineOffsetTop - containerHeight / 2 + lineEl.clientHeight / 2;
+          const targetScrollTop = activeEl.offsetTop - containerHeight / 2 + activeEl.clientHeight / 2;
           lyricsScroll.scrollTo({
             top: Math.max(0, targetScrollTop),
             behavior: "smooth",
           });
-        } else {
-          lineEl.classList.remove("active");
         }
-      });
+      }
     }
   }
 }
@@ -677,19 +695,25 @@ function updateUI(state) {
       if (amLargeArt && amLargeArt.src !== coverUrl) amLargeArt.src = coverUrl;
     }
 
-    if (btnLike) {
-      if (track.liked) {
-        btnLike.classList.add("liked");
-        btnLike.setAttribute("title", "Удалить из любимых");
-      } else {
-        btnLike.classList.remove("liked");
-        btnLike.setAttribute("title", "Мне нравится (добавить в любимое)");
+        if (btnLike) {
+      if (Date.now() > optimisticLikeUntil) {
+        const isLiked = !!(track.liked || track.isLiked);
+        if (isLiked) {
+          btnLike.classList.add("liked");
+          if (btnDislike) btnDislike.classList.remove("disliked");
+          btnLike.setAttribute("title", "Удалить из любимых");
+        } else {
+          btnLike.classList.remove("liked");
+          btnLike.setAttribute("title", "Мне нравится");
+        }
       }
     }
 
     if (btnDislike) {
-      if (track.disliked) {
+      const isDisliked = !!(track.disliked || track.isDisliked);
+      if (isDisliked) {
         btnDislike.classList.add("disliked");
+        if (btnLike && Date.now() > optimisticLikeUntil) btnLike.classList.remove("liked");
         btnDislike.setAttribute("title", "Убрать из не нравится");
       } else {
         btnDislike.classList.remove("disliked");
@@ -699,12 +723,8 @@ function updateUI(state) {
   }
 
   // Volume Sync
-  if (state.volume && !isDraggingVol) {
+  if (state.volume && !isDraggingVol && Date.now() > ignoreBackendVolumeUntil) {
     let v = typeof state.volume.volume === "number" ? state.volume.volume : currentVolume;
-    // If backend sent 1.0 but overlay has user-set custom volume, honor user volume
-    if (v >= 0.999 && currentVolume < 0.95 && !state.volume.muted) {
-      v = currentVolume;
-    }
     const m = !!state.volume.muted;
     renderVolumeUI(v, m);
   }
@@ -715,8 +735,14 @@ function updateUI(state) {
     const newDur = Number(progress.duration) || 0;
     const newSpeed = Number(progress.speed) || 1.0;
 
-    basePosition = newPos;
-    baseTimestamp = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+    const currentPos = getInterpolatedPosition();
+    const drift = Math.abs(newPos - currentPos);
+
+    // Only resync basePosition if paused or drift is significant (> 1.2s seek)
+    if (!isPlaying || drift > 1.2) {
+      basePosition = newPos;
+      baseTimestamp = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+    }
     if (newDur > 0) {
       const durChanged = Math.abs(newDur - trackDuration) > 1;
       trackDuration = newDur;
@@ -726,7 +752,7 @@ function updateUI(state) {
     }
     playbackSpeed = newSpeed > 0 ? newSpeed : 1.0;
 
-    renderProgress(basePosition);
+    renderProgress(getInterpolatedPosition());
   }
 
   // 4. Timer control based on active state
@@ -800,6 +826,25 @@ if (btnNext) {
 }
 
 // Volume UI & Drag Functions
+let overlayVolHideTimer = null;
+function showOverlayVolumePopup() {
+  if (amVolWrapper) amVolWrapper.classList.add("open");
+  if (amVolPopup) amVolPopup.classList.add("active");
+  if (overlayVolHideTimer) clearTimeout(overlayVolHideTimer);
+  overlayVolHideTimer = setTimeout(() => {
+    if (!isDraggingVol) {
+      if (amVolWrapper) amVolWrapper.classList.remove("open");
+      if (amVolPopup) amVolPopup.classList.remove("active");
+    }
+  }, 2200);
+}
+
+function hideOverlayVolumePopup() {
+  if (overlayVolHideTimer) clearTimeout(overlayVolHideTimer);
+  if (amVolWrapper) amVolWrapper.classList.remove("open");
+  if (amVolPopup) amVolPopup.classList.remove("active");
+}
+
 function renderVolumeUI(vol, muted) {
   currentVolume = Math.max(0, Math.min(1, typeof vol === "number" ? vol : 1.0));
   isMuted = !!muted;
@@ -830,6 +875,7 @@ function setVolumeAction(newVol) {
     localStorage.setItem("ym_overlay_volume", String(clamped));
   } catch (e) {}
   renderVolumeUI(clamped, false);
+  showOverlayVolumePopup();
   if (window.overlayApi) {
     const sendFn = window.overlayApi.sendPlayerAction || window.overlayApi.sendAction;
     if (typeof sendFn === "function") {
@@ -838,31 +884,79 @@ function setVolumeAction(newVol) {
   }
 }
 
-// Volume Slider Drag & Wheel
+// Volume Slider Drag & Wheel (Smooth 0-100% Tracking, Pointer Capture & No Snapback)
 if (amVolTrack) {
-  const updateVolFromEvent = (e) => {
-    const rect = amVolTrack.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (rect.bottom - e.clientY) / rect.height));
-    setVolumeAction(ratio);
+  let volIpcThrottleTimer = null;
+  let dragTrackRect = null;
+
+  const dispatchVolumeThrottled = (val) => {
+    if (volIpcThrottleTimer) return;
+    volIpcThrottleTimer = setTimeout(() => {
+      volIpcThrottleTimer = null;
+      if (window.overlayApi) {
+        const sendFn = window.overlayApi.sendPlayerAction || window.overlayApi.sendAction;
+        if (typeof sendFn === "function") sendFn("setVolume", { volume: val });
+      }
+    }, 25);
   };
 
-  amVolTrack.addEventListener("mousedown", (e) => {
+  const updateVolFromCoord = (clientY) => {
+    if (!dragTrackRect || dragTrackRect.height <= 0) {
+      dragTrackRect = amVolTrack.getBoundingClientRect();
+    }
+    const ratio = Math.max(0, Math.min(1, (dragTrackRect.bottom - clientY) / dragTrackRect.height));
+    const rounded = Math.round(ratio * 100) / 100;
+    currentVolume = rounded;
+    renderVolumeUI(rounded, false);
+    showOverlayVolumePopup();
+    ignoreBackendVolumeUntil = Date.now() + 3500;
+    try { localStorage.setItem("ym_overlay_volume", String(rounded)); } catch (err) {}
+    dispatchVolumeThrottled(rounded);
+  };
+
+  const onPointerDown = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
     isDraggingVol = true;
-    if (amVolWrapper) amVolWrapper.classList.add("open");
-    if (amVolPopup) amVolPopup.classList.add("active");
-    updateVolFromEvent(e);
-  });
+    dragTrackRect = amVolTrack.getBoundingClientRect();
+    ignoreBackendVolumeUntil = Date.now() + 3500;
+    try {
+      e.target.setPointerCapture(e.pointerId);
+    } catch (err) {}
+    showOverlayVolumePopup();
+    updateVolFromCoord(e.clientY);
+  };
 
-  window.addEventListener("mousemove", (e) => {
-    if (isDraggingVol) updateVolFromEvent(e);
-  });
+  const onPointerMove = (e) => {
+    if (isDraggingVol) {
+      e.preventDefault();
+      updateVolFromCoord(e.clientY);
+    }
+  };
 
-  window.addEventListener("mouseup", () => {
+  const onPointerUp = (e) => {
     if (isDraggingVol) {
       isDraggingVol = false;
-      if (amVolPopup) amVolPopup.classList.remove("active");
+      try {
+        e.target.releasePointerCapture(e.pointerId);
+      } catch (err) {}
+      ignoreBackendVolumeUntil = Date.now() + 3500;
+      setVolumeAction(currentVolume);
+      showOverlayVolumePopup();
     }
-  });
+  };
+
+  amVolTrack.addEventListener("pointerdown", onPointerDown);
+  amVolTrack.addEventListener("pointermove", onPointerMove);
+  amVolTrack.addEventListener("pointerup", onPointerUp);
+  amVolTrack.addEventListener("pointercancel", onPointerUp);
+
+  if (amVolPopup) {
+    amVolPopup.addEventListener("pointerdown", onPointerDown);
+    amVolPopup.addEventListener("pointermove", onPointerMove);
+    amVolPopup.addEventListener("pointerup", onPointerUp);
+    amVolPopup.addEventListener("pointercancel", onPointerUp);
+  }
 }
 
 // Wheel adjustments on Volume Wrapper / Button / Popup
@@ -870,14 +964,29 @@ const volElements = [amVolWrapper, btnVol, amVolPopup].filter(Boolean);
 volElements.forEach((el) => {
   el.addEventListener("wheel", (e) => {
     e.preventDefault();
+    e.stopPropagation();
     const delta = e.deltaY < 0 ? 0.05 : -0.05;
     setVolumeAction(currentVolume + delta);
+    showOverlayVolumePopup();
   }, { passive: false });
 });
+
+if (amVolWrapper) {
+  amVolWrapper.addEventListener("mouseenter", () => {
+    showOverlayVolumePopup();
+  });
+  amVolWrapper.addEventListener("mouseleave", () => {
+    if (!isDraggingVol) {
+      if (overlayVolHideTimer) clearTimeout(overlayVolHideTimer);
+      overlayVolHideTimer = setTimeout(hideOverlayVolumePopup, 600);
+    }
+  });
+}
 
 if (btnLike) {
   btnLike.addEventListener("click", () => {
     const isLiked = btnLike.classList.toggle("liked");
+    optimisticLikeUntil = Date.now() + 3000;
     if (isLiked && btnDislike) btnDislike.classList.remove("disliked");
     if (window.overlayApi) {
       const sendFn = window.overlayApi.sendPlayerAction || window.overlayApi.sendAction;
@@ -901,8 +1010,10 @@ if (btnVol) {
   btnVol.addEventListener("click", (e) => {
     e.stopPropagation();
     if (amVolPopup && amVolPopup.contains(e.target)) return;
-    if (amVolWrapper) {
-      amVolWrapper.classList.toggle("open");
+    if (amVolWrapper && (amVolWrapper.classList.contains("open") || amVolPopup?.classList.contains("active"))) {
+      hideOverlayVolumePopup();
+    } else {
+      showOverlayVolumePopup();
     }
   });
 }
@@ -910,7 +1021,7 @@ if (btnVol) {
 // Close volume popup on outside click
 document.addEventListener("click", (e) => {
   if (amVolWrapper && !amVolWrapper.contains(e.target)) {
-    amVolWrapper.classList.remove("open");
+    hideOverlayVolumePopup();
   }
 });
 

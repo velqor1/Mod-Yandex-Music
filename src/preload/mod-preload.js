@@ -36,36 +36,57 @@
         window.__ymActiveAudio = null;
         window.__ymKnownAudios = new Set();
 
+        const isAudioTag = (el) => {
+          if (!el) return false;
+          if (el.id === "ym-live-wallpaper-video") return false;
+          if (el.tagName && el.tagName.toLowerCase() === "video") return false;
+          if (typeof HTMLAudioElement !== "undefined" && el instanceof HTMLAudioElement) return true;
+          return el.tagName && el.tagName.toLowerCase() === "audio";
+        };
+
         const origPlay = HTMLMediaElement.prototype.play;
         HTMLMediaElement.prototype.play = function() {
-          window.__ymActiveAudio = this;
-          window.__ymKnownAudios.add(this);
+          if (isAudioTag(this)) {
+            window.__ymActiveAudio = this;
+            window.__ymKnownAudios.add(this);
+          }
           return origPlay.apply(this, arguments);
         };
 
         const origPause = HTMLMediaElement.prototype.pause;
         HTMLMediaElement.prototype.pause = function() {
-          window.__ymKnownAudios.add(this);
+          if (isAudioTag(this)) {
+            window.__ymKnownAudios.add(this);
+          }
           return origPause.apply(this, arguments);
         };
 
         const origLoad = HTMLMediaElement.prototype.load;
         HTMLMediaElement.prototype.load = function() {
-          window.__ymKnownAudios.add(this);
+          if (isAudioTag(this)) {
+            window.__ymKnownAudios.add(this);
+          }
           return origLoad.apply(this, arguments);
         };
 
         window.__ymGetActiveAudio = function() {
-          if (window.__ymActiveAudio && !window.__ymActiveAudio.error) {
+          if (window.__ymActiveAudio && !window.__ymActiveAudio.error && isAudioTag(window.__ymActiveAudio)) {
             return window.__ymActiveAudio;
           }
           if (window.__ymKnownAudios && window.__ymKnownAudios.size > 0) {
             for (const a of window.__ymKnownAudios) {
-              if (a && !a.paused) return a;
+              if (a && isAudioTag(a) && !a.paused) return a;
             }
-            return Array.from(window.__ymKnownAudios)[0];
+            for (const a of window.__ymKnownAudios) {
+              if (a && isAudioTag(a)) return a;
+            }
           }
-          return null;
+          try {
+            const domAudios = Array.from(document.querySelectorAll("audio")).filter(isAudioTag);
+            return domAudios.find(a => !a.paused) || domAudios[0] || null;
+          } catch(e) {
+            return null;
+          }
         };
       }
     } catch (_ae) {}

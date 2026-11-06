@@ -34,3 +34,28 @@ tools/*.exe
 tools/*.7z
 tools/*.zip
 
+
+# Temporary tools & mobile work
+tools/*.jar
+tools/check_*.py
+tools/find_*.py
+tools/patch_*.py
+tools/print_*.py
+tools/test_*.py
+tools/inspect_*.py
+tools/cat_*.py
+tools/methods_*.py
+tools/scan_*.py
+tools/search_*.py
+tools/parse_*.py
+tools/*.txt
+tools/*.jpg
+tools/*.png
+tools/*.js
+tools/*.ps1
+*.apk
+*.apk.idsig
+*.log
+mobile_test/
+tools/decompiled/
+scratch_*.py
