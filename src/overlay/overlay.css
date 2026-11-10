@@ -1,4 +1,4 @@
-/* Apple Music macOS MiniPlayer Overlay Stylesheet (v1.4.0) */
+/* Apple Music macOS MiniPlayer Overlay Stylesheet (v1.5.0) */
 :root {
   --am-bg: rgba(28, 28, 30, 0.96);
   --am-border: rgba(255, 255, 255, 0.08);
@@ -41,7 +41,7 @@ body.am-body {
 }
 
 /* Main Container Card (macOS Apple Music MiniPlayer Frosted Acrylic) */
-.am-player-card {
+.am-player-card, .overlay-card {
   position: relative;
   width: 100%;
   height: 100%;

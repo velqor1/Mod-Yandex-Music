@@ -1,6 +1,8 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("karaokeApi", {
+  setIgnoreMouseEvents: (ignore, options) => ipcRenderer.send("karaoke:setIgnoreMouseEvents", ignore, options),
+  sendPlayerAction: (action, payload) => ipcRenderer.send("yandexMusicMod.executePlayerAction", action, payload),
   onTrackUpdate: (callback) => {
     const listener = (_e, state) => callback(state);
     ipcRenderer.on("karaoke:trackUpdate", listener);

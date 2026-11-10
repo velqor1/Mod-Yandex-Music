@@ -1,4 +1,4 @@
-# 🎵 Яндекс Музыка — мод без Плюса (v1.4.0)
+# 🎵 Яндекс Музыка — мод без Плюса (v1.5.0)
 
 Набор премиальных модификаций для официального десктопного приложения **Яндекс Музыка (версия 5.124.1)**: полнофункциональный **Яндекс Плюс**, игровой HUD-оверлей поверх всех окон, синхронные тексты песен (Караоке в стиле Apple Music), Discord Rich Presence, кастомные игровые и сезонные шрифты с эффектами и матовый дизайн из темного стекла.
 
@@ -14,7 +14,7 @@
   <a href="https://github.com/velqor1/Mod-Yandex-Music/releases/latest">
     <img src="https://img.shields.io/badge/Скачать%20EXE-Установщик%20в%201%20клик-8b5cf6?style=for-the-badge&logo=windows&logoColor=white" alt="Скачать EXE">
   </a>
-  <img src="https://img.shields.io/badge/Мод%20Версия-v1.4.0-ff2d3c?style=for-the-badge&logo=github&logoColor=white" alt="Мод v1.4.0">
+  <img src="https://img.shields.io/badge/Мод%20Версия-v1.5.0-ff2d3c?style=for-the-badge&logo=github&logoColor=white" alt="Мод v1.5.0">
   <img src="https://img.shields.io/badge/Яндекс%20Музыка-5.124.1-007acc?style=for-the-badge&logo=yandex" alt="Версия 5.124.1">
   <img src="https://img.shields.io/badge/Discord%20RPC-Поддерживается-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord RPC">
   <img src="https://img.shields.io/badge/Статус-Плюс%20Активен-10b981?style=for-the-badge" alt="Статус">

@@ -156,6 +156,34 @@ function initModMain() {
   }
 
   settingsManager.onChange((key, value) => {
+    if (key === "overlay/hotkey") {
+      try {
+        const oldHk = settingsManager.get("overlay/hotkey", "Control+Shift+H");
+        if (oldHk) globalShortcut.unregister(oldHk);
+        if (value) {
+          globalShortcut.register(value, () => {
+            if (overlayWindow && !overlayWindow.isDestroyed()) {
+              if (overlayWindow.isVisible()) overlayWindow.hide();
+              else overlayWindow.show();
+            }
+          });
+        }
+      } catch (e) {}
+    }
+    if (key === "karaoke/hotkey") {
+      try {
+        const oldHk = settingsManager.get("karaoke/hotkey", "Control+Shift+L");
+        if (oldHk) globalShortcut.unregister(oldHk);
+        if (value) {
+          globalShortcut.register(value, () => {
+            if (karaokeWindow && !karaokeWindow.isDestroyed()) {
+              if (karaokeWindow.isVisible()) karaokeWindow.hide();
+              else karaokeWindow.show();
+            }
+          });
+        }
+      } catch (e) {}
+    }
     if (key === "discordRPC/appTitle") {
       const newCid = resolveDiscordClientId(value);
       if (discordRPC) {
@@ -611,6 +639,34 @@ let rpcLastSentState = {
   timestamp: 0,
 };
 
+
+function normalizeDiscordCover(url) {
+  if (!url || typeof url !== "string") return "";
+  let clean = url.trim();
+  if (!clean) return "";
+  clean = clean.replace(/^music-application:\/\/?/i, "");
+  clean = clean.replace(/^(?:https?:)?\/\//i, "");
+  clean = clean.replace(/^\/+/, "");
+  if (!clean.includes("avatars.yandex.net") && !clean.includes("yandex.ru") && !clean.includes("yastatic.net")) {
+    if (clean.startsWith("get-music-content/")) {
+      clean = "avatars.yandex.net/" + clean;
+    } else if (clean.startsWith("get-music-user-playlist/")) {
+      clean = "avatars.yandex.net/" + clean;
+    } else {
+      clean = "avatars.yandex.net/get-music-content/" + clean;
+    }
+  }
+  if (clean.includes("%%")) {
+    clean = clean.replace("%%", "400x400");
+  } else {
+    clean = clean.replace(/\/(?:\d+x\d+)\b[^\/]*$/, "/400x400");
+    if (!/\/\d+x\d+$/.test(clean)) {
+      clean = clean.replace(/\/+$/, "") + "/400x400";
+    }
+  }
+  return "https://" + clean;
+}
+
 function updateDiscordActivity(state) {
   if (!discordRPC || !discordRPC.enabled) return;
   if (!state) {
@@ -626,14 +682,16 @@ function updateDiscordActivity(state) {
   const isPlaying = state.isPlaying !== undefined 
     ? !!state.isPlaying 
     : (state.playback ? !!state.playback.isPlaying : false);
-  const position = (state.progress && state.progress.position) 
+  let rawPosition = (state.progress && state.progress.position) 
     || (state.playback && state.playback.position) 
     || state.position 
     || 0;
-  const duration = (state.progress && state.progress.duration) 
+  let rawDuration = (state.progress && state.progress.duration) 
     || (state.playback && state.playback.duration) 
     || state.duration 
     || 0;
+  const position = rawPosition > 10000 ? Math.floor(rawPosition / 1000) : rawPosition;
+  const duration = rawDuration > 10000 ? Math.floor(rawDuration / 1000) : rawDuration;
 
   const rawTitle = track.title || "";
   let rawArtist = "";
@@ -683,20 +741,36 @@ function updateDiscordActivity(state) {
 
   const isEn = settingsManager && settingsManager.get("discordRPC/appTitle", "ru") === "en";
 
-  const cleanTitle = (rawTitle || "").trim();
-  const cleanArtist = (rawArtist || "").trim();
+  let cleanTitle = (rawTitle || "").trim();
+  let cleanArtist = (rawArtist || "").trim();
+  if (cleanTitle && cleanArtist) {
+    const tLow = cleanTitle.toLowerCase();
+    let aLow = cleanArtist.toLowerCase();
+
+    // Strip title from start: "Title, Artist" -> "Artist"
+    if (aLow !== tLow && aLow.startsWith(tLow)) {
+      const rest = cleanArtist.substring(cleanTitle.length);
+      const sepMatch = rest.match(/^[\s,\u2013\u2014\u2022\u002d\u002f\u007c]+/);
+      if (sepMatch) {
+        cleanArtist = rest.substring(sepMatch[0].length).trim();
+        aLow = cleanArtist.toLowerCase();
+      }
+    }
+    // Strip title from end: "Artist — Title" -> "Artist"
+    if (aLow !== tLow && aLow.endsWith(tLow) && cleanArtist.length > cleanTitle.length) {
+      const prefix = cleanArtist.substring(0, cleanArtist.length - cleanTitle.length);
+      const sepMatch = prefix.match(/[\s,\u2013\u2014\u2022\u002d\u002f\u007c]+$/);
+      if (sepMatch) {
+        cleanArtist = prefix.substring(0, prefix.length - sepMatch[0].length).trim();
+      }
+    }
+  }
   const safeTitle = (cleanTitle.length === 1 ? cleanTitle + "\u200b" : cleanTitle).substring(0, 128) || (isEn ? "Music" : "Музыка");
   const safeArtist = (cleanArtist.length === 1 ? cleanArtist + "\u200b" : cleanArtist).substring(0, 128) || (isEn ? "Yandex Music" : "Яндекс Музыка");
 
-  let validCover = track.coverUrl || track.coverUri || (track.ogImage ? "https://" + track.ogImage.replace("%%", "400x400") : "");
-  if (validCover && validCover.startsWith("//")) {
-    validCover = "https:" + validCover;
-  }
-  if (validCover && validCover.includes("%%")) {
-    validCover = validCover.replace("%%", "400x400");
-  }
-  if (!validCover || !validCover.startsWith("http")) {
-    validCover = "https://music.yandex.ru/favicon.ico";
+  let validCover = normalizeDiscordCover(track.coverUrl || track.coverUri || (track.ogImage ? "https://" + track.ogImage : ""));
+  if (!validCover || !validCover.startsWith("http") || validCover.includes("favicon.ico")) {
+    validCover = "https://raw.githubusercontent.com/FozerG/WinYandexMusicRPC/main/assets/YandexMusic.png";
   }
 
   const activityTypeSetting = settingsManager ? settingsManager.get("discordRPC/activityType", "listening") : "listening";
@@ -708,7 +782,7 @@ function updateDiscordActivity(state) {
     state: safeArtist,
     assets: {
       large_image: validCover,
-      large_text: album ? `${album} — ${safeTitle}`.substring(0, 128) : safeTitle,
+      large_text: (album && album.toLowerCase() !== safeTitle.toLowerCase() && album.toLowerCase() !== safeArtist.toLowerCase()) ? `${album} — ${safeTitle}`.substring(0, 128) : safeTitle,
       small_image: isPlaying 
         ? "https://raw.githubusercontent.com/FozerG/WinYandexMusicRPC/main/assets/Playing.png" 
         : "https://raw.githubusercontent.com/FozerG/WinYandexMusicRPC/main/assets/Paused.png",
@@ -720,20 +794,20 @@ function updateDiscordActivity(state) {
   };
 
   if (isPlaying) {
-    const nowMs = Date.now();
-    const startMs = Math.round(nowMs - (position || 0) * 1000);
-    const endMs = duration > 0 ? Math.round(startMs + duration * 1000) : null;
+    const nowSec = Math.floor(Date.now() / 1000);
+    const startSec = Math.round(nowSec - (position || 0));
+    const endSec = duration > 0 ? Math.round(startSec + duration) : null;
 
     activity.timestamps = {};
     if (timeFormat === "elapsed") {
-      activity.timestamps.start = startMs;
-    } else if (timeFormat === "remaining" && endMs) {
-      activity.timestamps.end = endMs;
-    } else if (endMs) {
-      activity.timestamps.start = startMs;
-      activity.timestamps.end = endMs;
+      activity.timestamps.start = startSec;
+    } else if (timeFormat === "remaining" && endSec) {
+      activity.timestamps.end = endSec;
+    } else if (endSec) {
+      activity.timestamps.start = startSec;
+      activity.timestamps.end = endSec;
     } else {
-      activity.timestamps.start = startMs;
+      activity.timestamps.start = startSec;
     }
   }
 
@@ -747,8 +821,8 @@ function updateDiscordActivity(state) {
   const showModBtn = settingsManager ? settingsManager.get("discordRPC/showModButton", true) : true;
   if (showModBtn) {
     buttons.push({
-      label: "💻 Yandex Music Mod",
-      url: "https://github.com/velqor1/Yandex-Music-Mod",
+      label: isEn ? "💻 Download Mod" : "💻 Скачать мод",
+      url: "https://github.com/velqor1/Mod-Yandex-Music/releases",
     });
   }
   if (buttons.length > 0) {
@@ -772,7 +846,7 @@ function startPlayerStatePolling() {
       }
 
       const wins = BrowserWindow.getAllWindows();
-      const mainWin = wins.find((w) => !w.isDestroyed() && w !== overlayWindow && w !== karaokeWindow);
+      const mainWin = wins.find((w) => !w.isDestroyed() && w !== overlayWindow && w !== karaokeWindow && w !== vsthemesWindow);
       if (mainWin && !mainWin.isDestroyed()) {
         const pState = await mainWin.webContents.executeJavaScript(`
           (() => {
@@ -782,6 +856,8 @@ function startPlayerStatePolling() {
 
         if (pState && pState.data) {
           if (!lastPlayerState || lastPlayerState.track?.id !== pState.data.trackMeta?.id || lastPlayerState.isPlaying !== pState.data.isPlaying) {
+            lastPlayerState = pState.data;
+            lastPlayerStateTimestamp = Date.now();
             updateDiscordActivity(pState.data);
           }
         }
@@ -1837,8 +1913,18 @@ function setupIpcHandlers() {
     }
     if (!trackTitle && !trackId) return null;
     try {
-      const cleanTitle = (trackTitle || "").trim();
-      const cleanArtist = (trackArtist || "").trim();
+      let cleanTitle = (trackTitle || "").trim();
+      let cleanArtist = (trackArtist || "").trim();
+      if (cleanTitle && cleanArtist) {
+        const tLow = cleanTitle.toLowerCase();
+        const aLow = cleanArtist.toLowerCase();
+        if (aLow !== tLow && aLow.startsWith(tLow)) {
+          const rest = aLow.substring(tLow.length).replace(/^[\s,–—-]+/, "").trim();
+          if (rest.length > 0) {
+            cleanArtist = cleanArtist.substring(cleanTitle.length).replace(/^[\s,–—-]+/, "").trim();
+          }
+        }
+      }
 
       const fetchJson = (url, extraHeaders = {}) => {
         return new Promise((resolve) => {
@@ -1850,7 +1936,7 @@ function setupIpcHandlers() {
                 "Accept": "application/json, text/plain, */*",
                 ...extraHeaders,
               },
-              timeout: 2500,
+              timeout: 6000,
             },
             (res) => {
               let data = "";
@@ -1876,19 +1962,29 @@ function setupIpcHandlers() {
         });
       };
 
-      const fetchText = (url, extraHeaders = {}) => {
+      const fetchText = (url, extraHeaders = {}, redirectCount = 0) => {
         return new Promise((resolve) => {
+          if (redirectCount > 3) return resolve(null);
           const req = https.get(
             url,
             {
               headers: {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0",
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
                 ...extraHeaders,
               },
-              timeout: 3500,
+              timeout: 6000,
             },
             (res) => {
+              if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+                let redirectUrl = res.headers.location;
+                if (redirectUrl.startsWith("/")) {
+                  const u = new URL(url);
+                  redirectUrl = `${u.protocol}//${u.host}${redirectUrl}`;
+                }
+                return resolve(fetchText(redirectUrl, extraHeaders, redirectCount + 1));
+              }
               let data = "";
               res.on("data", (chunk) => (data += chunk));
               res.on("end", () => {
@@ -1950,9 +2046,45 @@ function setupIpcHandlers() {
         } catch (e) {}
       }
 
-      // 2. Tier 2: LRCLib Direct Match (with fast timeout in case of 502)
+      // 2. Tier 2: LRCLib Direct Match + Search Fallback (with Title Matching & 6s timeout)
       if (cleanTitle) {
         try {
+          function normalizeStr(s) {
+            if (!s) return "";
+            return s
+              .toLowerCase()
+              .replace(/[\(\[\{].*?[\)\]\}]/g, " ")
+              .replace(/[^\w\u0400-\u04ff]+/g, " ")
+              .replace(/\s+/g, " ")
+              .trim();
+          }
+
+          function isLyricsMatch(hit, targetTitle, targetArtist) {
+            if (!hit) return false;
+            const ht = normalizeStr(hit.trackName || "");
+            const ha = normalizeStr(hit.artistName || "");
+            const tt = normalizeStr(targetTitle);
+            const ta = normalizeStr(targetArtist);
+            if (!tt) return false;
+
+            const titleMatch = (tt === ht || ht.includes(tt) || tt.includes(ht));
+            const artistMatch = !ta || !ha || (ta === ha || ha.includes(ta) || ta.includes(ha) ||
+              ta.split(" ").filter((p) => p.length > 2).some((p) => ha.includes(p)));
+
+            if (titleMatch && artistMatch) return true;
+
+            // Inverted LRCLib entry (artist and title swapped)
+            const invertedTitle = (tt === ha || ha.includes(tt) || tt.includes(ha));
+            const invertedArtist = !ta || !ht || (ta === ht || ht.includes(ta) || ta.includes(ht) ||
+              ta.split(" ").filter((p) => p.length > 2).some((p) => ht.includes(p)));
+            if (invertedTitle && invertedArtist) return true;
+
+            return false;
+          }
+
+          const primaryArtist = cleanArtist.split(/[,&]/)[0].replace(/\bfeat\.?.*$/i, "").trim();
+
+          // 2.1 Direct Get (Exact match by title + artist)
           const query = new URLSearchParams({
             track_name: cleanTitle,
             artist_name: cleanArtist,
@@ -1963,6 +2095,44 @@ function setupIpcHandlers() {
           }
           if (direct && direct.plainLyrics && !plainLyricsFallback) {
             plainLyricsFallback = direct.plainLyrics;
+          }
+
+          // 2.2 Direct Get with primary artist if multiple artists
+          if (primaryArtist && primaryArtist.toLowerCase() !== cleanArtist.toLowerCase()) {
+            const priQuery = new URLSearchParams({
+              track_name: cleanTitle,
+              artist_name: primaryArtist,
+            }).toString();
+            const priDirect = await fetchJson(`https://lrclib.net/api/get?${priQuery}`);
+            if (priDirect && priDirect.syncedLyrics) {
+              return priDirect.syncedLyrics;
+            }
+            if (priDirect && priDirect.plainLyrics && !plainLyricsFallback) {
+              plainLyricsFallback = priDirect.plainLyrics;
+            }
+          }
+
+          // 2.3 Search with multiple query strategies and strict title verification
+          const searchQueries = [
+            `${cleanArtist} ${cleanTitle}`,
+            primaryArtist && primaryArtist.toLowerCase() !== cleanArtist.toLowerCase() ? `${primaryArtist} ${cleanTitle}` : null,
+            cleanTitle
+          ].filter(Boolean);
+
+          for (const sq of searchQueries) {
+            const searchData = await fetchJson(`https://lrclib.net/api/search?q=${encodeURIComponent(sq)}`);
+            if (Array.isArray(searchData) && searchData.length > 0) {
+              const hit = searchData.find((item) => item && item.syncedLyrics && isLyricsMatch(item, cleanTitle, cleanArtist));
+              if (hit && hit.syncedLyrics) {
+                return hit.syncedLyrics;
+              }
+              if (!plainLyricsFallback) {
+                const plainHit = searchData.find((item) => item && item.plainLyrics && isLyricsMatch(item, cleanTitle, cleanArtist));
+                if (plainHit && plainHit.plainLyrics) {
+                  plainLyricsFallback = plainHit.plainLyrics;
+                }
+              }
+            }
           }
         } catch (_lrce) {}
       }

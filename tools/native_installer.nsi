@@ -15,7 +15,7 @@ VIProductVersion "5.124.1.0"
 VIAddVersionKey "ProductName" "Яндекс Музыка Mod"
 VIAddVersionKey "CompanyName" "velqor1"
 VIAddVersionKey "LegalCopyright" "velqor1"
-VIAddVersionKey "FileDescription" "Яндекс Музыка Mod v1.4.0"
+VIAddVersionKey "FileDescription" "Яндекс Музыка Mod v1.5.0"
 VIAddVersionKey "FileVersion" "5.124.1.0"
 
 !define MUI_ICON "..\assets\icon.ico"
@@ -62,7 +62,7 @@ Section "MainSection" SEC01
     System::Call 'shell32.dll::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
 
     DetailPrint "Завершение установки..."
-    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\YandexMusic" "DisplayName" "Яндекс Музыка Mod v1.4.0"
+    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\YandexMusic" "DisplayName" "Яндекс Музыка Mod v1.5.0"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\YandexMusic" "DisplayVersion" "1.4.0"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\YandexMusic" "Publisher" "velqor1"
     WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\YandexMusic" "DisplayIcon" "$INSTDIR\resources\assets\icon.ico"

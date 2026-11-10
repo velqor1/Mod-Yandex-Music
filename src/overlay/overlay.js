@@ -1,4 +1,4 @@
-// Apple Music macOS MiniPlayer Overlay Controller (v1.4.0)
+// Apple Music macOS MiniPlayer Overlay Controller (v1.5.0)
 // Real-time 60fps interpolation, 1-in-1 lyrics synchronization, smooth centering scroll, click-to-seek
 
 const isBrowser = typeof window !== "undefined" && typeof document !== "undefined";

@@ -322,9 +322,12 @@ if (typeof window !== "undefined" && window.karaokeApi) {
     applyLyricsData(lyricsData);
   });
 
-  // Hydrate immediately
-  if (window.karaokeApi.getLastPlayerState) {
-    window.karaokeApi.getLastPlayerState().then((state) => {
+  // Hydrate immediately with atomic state handling
+  if (window.karaokeApi.getLastPlayerState && window.karaokeApi.getLastLyrics) {
+    Promise.all([
+      window.karaokeApi.getLastPlayerState().catch(() => null),
+      window.karaokeApi.getLastLyrics().catch(() => null)
+    ]).then(([state, lyricsData]) => {
       if (state && state.track) {
         isPlaying = !!state.isPlaying;
         if (state.progress && state.progress.duration) {
@@ -333,14 +336,23 @@ if (typeof window !== "undefined" && window.karaokeApi) {
           basePosition = state.progress.position || 0;
         }
         currentTrackKey = getTrackKey(state.track);
+
+        // Update cover & initial track info
+        const rawCover = state.track.coverUrl || state.track.coverUri || (state.track.ogImage ? "https://" + state.track.ogImage.replace("%%", "200x200") : "");
+        const coverUrl = normalizeCoverUrl(rawCover);
+        if (coverUrl && capsuleCover) {
+          capsuleCover.src = coverUrl;
+        }
+        if (btnPlay) {
+          btnPlay.setAttribute("aria-label", isPlaying ? "Пауза" : "Воспроизведение");
+          if (iconPlay) iconPlay.classList.toggle("hidden", isPlaying);
+          if (iconPause) iconPause.classList.toggle("hidden", !isPlaying);
+        }
         if (isPlaying) startInterpolation();
       }
-    }).catch(() => {});
-  }
-
-  if (window.karaokeApi.getLastLyrics) {
-    window.karaokeApi.getLastLyrics().then((lyricsData) => {
-      if (lyricsData) applyLyricsData(lyricsData);
+      if (lyricsData) {
+        applyLyricsData(lyricsData);
+      }
     }).catch(() => {});
   }
 }
