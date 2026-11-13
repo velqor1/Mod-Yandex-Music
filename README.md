@@ -4,13 +4,13 @@
 
 <p align="center">
   <a href="https://github.com/velqor1/Mod-Yandex-Music/releases/latest"><img src="https://img.shields.io/badge/Windows-Скачать_EXE-ff2d3c?style=for-the-badge" alt="Скачать Windows-версию" /></a>
-  <a href="https://github.com/velqor1/Mod-Yandex-Music/raw/refs/heads/main/android/YandexMusic-Mod-0.5.2.apk"><img src="https://img.shields.io/badge/Android-Скачать_APK-ff2d3c?style=for-the-badge" alt="Скачать Android APK" /></a>
+  <a href="https://github.com/velqor1/Mod-Yandex-Music/releases/download/v1.5.0/YandexMusic-Mod-0.5.2.apk"><img src="https://img.shields.io/badge/Android-Скачать_APK-ff2d3c?style=for-the-badge" alt="Скачать Android APK" /></a>
 </p>
 
 | Версия | Основа | Скачать |
 | --- | --- | --- |
 | **Windows · v1.5.0** | Яндекс Музыка 5.124.1, x64 | [Установщик EXE](https://github.com/velqor1/Mod-Yandex-Music/releases/latest) |
-| **Android · 0.5.2-alpha.1** | Яндекс Музыка 2026.11.1 | [APK · 46,6 МиБ](https://github.com/velqor1/Mod-Yandex-Music/raw/refs/heads/main/android/YandexMusic-Mod-0.5.2.apk) |
+| **Android · 0.5.2-alpha.1** | Яндекс Музыка 2026.11.1 | [APK · 46,6 МиБ](https://github.com/velqor1/Mod-Yandex-Music/releases/download/v1.5.0/YandexMusic-Mod-0.5.2.apk) |
 
 ## Windows
 
@@ -74,7 +74,7 @@ python tools/inject.py
 
 ### Установка на Android
 
-1. Скачайте **[YandexMusic-Mod-0.5.2.apk](https://github.com/velqor1/Mod-Yandex-Music/raw/refs/heads/main/android/YandexMusic-Mod-0.5.2.apk)** на телефон.
+1. Скачайте **[YandexMusic-Mod-0.5.2.apk](https://github.com/velqor1/Mod-Yandex-Music/releases/download/v1.5.0/YandexMusic-Mod-0.5.2.apk)** на телефон.
 2. Откройте APK и при необходимости разрешите установку из выбранного браузера или файлового менеджера.
 3. Установите приложение и войдите в свой Яндекс-аккаунт.
 4. На «Моей волне» нажмите красный значок мода. Настройки также доступны из штатного меню настроек и через долгое нажатие на значок приложения.
