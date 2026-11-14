@@ -3,6 +3,7 @@ const path = require("path");
 const { app } = require("electron");
 
 const DEFAULT_SETTINGS = {
+  "updates/automatic": true,
   // Plus Unlocker
   "plus-unlocker/enabled": true,
   "plus-unlocker/bypassAds": true,
@@ -10,7 +11,15 @@ const DEFAULT_SETTINGS = {
   "plus-unlocker/hideUpgradePrompts": true,
 
   // Appearance & Design
-  "design/mode": "modern", // "classic" | "modern"
+  "settings/appearance": "standard", // independent menu: standard | modern | classic | compact
+  "settings/useAppFont": false,
+  "design/mode": "modern", // "modern" | "classic" | "compact"
+  "design/modern/transparency": 18,
+  "design/modern/edge": true,
+  "design/classic/tone": "dark",
+  "design/classic/radius": 8,
+  "design/compact/playerHeight": 64,
+  "design/compact/rowDensity": "tight",
   "design/glassBlur": "medium", // "off" | "light" | "medium" | "ultra"
   "design/borderRadius": "modern", // "classic" | "modern" | "round"
   "design/cardHoverFx": true,

@@ -222,6 +222,8 @@ function initModMain() {
 
   // 2. Setup IPC Handlers
   setupIpcHandlers();
+  require('./updater-ipc').setupModUpdater({app,ipcMain,BrowserWindow,settings:settingsManager,
+    isAuxiliary: win => win === overlayWindow || win === karaokeWindow || win === vsthemesWindow || (activeDownloadWorkers && activeDownloadWorkers.has(win))});
   startPlayerStatePolling();
 
   // 3. Register devtools shortcuts & console logger on every window

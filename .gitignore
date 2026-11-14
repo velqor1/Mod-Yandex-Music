@@ -59,3 +59,12 @@ tools/*.ps1
 mobile_test/
 tools/decompiled/
 scratch_*.py
+
+# Native Android probe: local SDK paths, build state and credentials
+mobile/android/.gradle/
+mobile/android/.kotlin/
+mobile/android/local.properties
+mobile/android/**/build/
+mobile/android/*.jks
+mobile/android/*.keystore
+mobile/android/captures/

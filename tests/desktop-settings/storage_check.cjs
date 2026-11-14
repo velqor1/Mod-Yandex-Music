@@ -1,0 +1,26 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const root = path.resolve(__dirname,'../..');
+const output = path.join(root,'build/liquid-menu');
+const directory = fs.mkdtempSync(path.join(output,'storage-check-'));
+const source = fs.readFileSync(path.join(root,'src/main/settings.js'),'utf8');
+const context = {module:{exports:{}},console,require:name=>name==='electron'?{app:{getPath:()=>directory}}:require(name)};
+vm.runInNewContext(source,context,{filename:'settings.js'});
+const {SettingsManager}=context.module.exports;
+const manager = new SettingsManager();
+let notifications=0;manager.onChange(()=>notifications++);
+const report=JSON.parse(fs.readFileSync(path.join(output,'report.json'),'utf8'));
+const writes=report.calls.filter(call=>call.method==='setStorageValue');
+const expected={};
+for(const write of writes){manager.set(write.key,write.value);expected[write.key]=write.value;}
+assert.equal(notifications,writes.length);
+const reopened = new SettingsManager();
+for(const [key,value] of Object.entries(expected))assert.deepEqual(reopened.get(key),value,key);
+const ids=new Set(report.options.map(option=>option.id));
+assert.equal(ids.size,64);
+assert(ids.has('opt-menu-appearance') && ids.has('opt-menu-app-font'),'both independent menu controls covered');
+assert.equal(report.options.every(option=>option.ok),true,'all 64 options/actions');
+assert.equal(report.checks.every(check=>check.ok),true,'all functional checks');
+console.log(`PASS: ${writes.length} writes; ${Object.keys(expected).length} keys restored by real SettingsManager; notifications retained; 64 controls covered.`);

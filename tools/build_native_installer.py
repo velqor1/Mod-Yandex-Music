@@ -1,83 +1,30 @@
-import os
-import shutil
-import subprocess
-import sys
+"""Build a local NSIS installer and its public, token-free Windows manifest."""
+from pathlib import Path
+import argparse,hashlib,json,os,shutil,subprocess
+from desktop_package import ROOT,patch_installation
 
 def build_installer():
-    app_dir = os.path.expandvars(r"%LOCALAPPDATA%\Programs\YandexMusic")
-    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    staging_dir = os.path.join(repo_root, "dist", "staging")
-    nsis_exe = os.path.join(repo_root, "tools", "nsis", "makensis.exe")
-    nsi_script = os.path.join(repo_root, "tools", "native_installer.nsi")
-    dist_dir = os.path.join(repo_root, "dist")
-
-    if not os.path.isdir(app_dir):
-        print(f"[-] App directory not found: {app_dir}")
-        sys.exit(1)
-
-    print(f"[+] Staging files from {app_dir} to {staging_dir}...")
-    if os.path.exists(staging_dir):
-        shutil.rmtree(staging_dir, ignore_errors=True)
-    os.makedirs(staging_dir, exist_ok=True)
-
-    def ignore_patterns(folder, items):
-        ignored = []
-        for item in items:
-            if item.endswith(".bak") or item.endswith(".tmp") or item.endswith(".log"):
-                ignored.append(item)
-        return ignored
-
-    # Copy files
-    for root, dirs, files in os.walk(app_dir):
-        rel_path = os.path.relpath(root, app_dir)
-        dest_folder = os.path.join(staging_dir, rel_path) if rel_path != "." else staging_dir
-        os.makedirs(dest_folder, exist_ok=True)
-        for f in files:
-            if f.endswith(".bak") or f.endswith(".tmp") or f.endswith(".log"):
-                continue
-            src_file = os.path.join(root, f)
-            dest_file = os.path.join(dest_folder, f)
-            shutil.copy2(src_file, dest_file)
-
-    print(f"[+] Staged files count: {sum(len(f) for _, _, f in os.walk(staging_dir))}")
-
-    # Patch PE icon in staging executable before packaging
-    try:
-        ico_file = os.path.join(repo_root, "assets", "icon.ico")
-        from patch_exe_icon import patch_exe_icon
-        for f in os.listdir(staging_dir):
-            if f.endswith(".exe") and not f.startswith("Uninstall"):
-                patch_exe_icon(os.path.join(staging_dir, f), ico_file)
-                print(f"[+] Patched PE icon in staging executable: {f}")
-    except Exception as e:
-        print(f"[!] Warning patching staging exe icon: {e}")
-
-    print(f"[+] Compiling installer with NSIS: {nsis_exe} (/INPUTCHARSET UTF8)...")
-    proc = subprocess.run([nsis_exe, "/INPUTCHARSET", "UTF8", nsi_script], cwd=os.path.join(repo_root, "tools"), capture_output=True)
-    try:
-        print(proc.stdout.decode("utf-8", errors="replace"))
-    except Exception:
-        pass
-    if proc.returncode != 0:
-        print("[-] NSIS compilation failed:")
-        try:
-            print(proc.stderr.decode("utf-8", errors="replace"))
-        except Exception:
-            pass
-        sys.exit(1)
-
-    target_mod = os.path.join(dist_dir, "Yandex_Music_x64_5.124.1_Mod.exe")
-
-    if not os.path.isfile(target_mod):
-        print(f"[-] Expected output file not found: {target_mod}")
-        sys.exit(1)
-
-    size_mod = os.path.getsize(target_mod) / (1024 * 1024)
-    print(f"[+] Created {target_mod} ({size_mod:.1f} MB)")
-
-    print("[+] Cleaning up staging directory...")
-    shutil.rmtree(staging_dir, ignore_errors=True)
-    print("[+] Done!")
-
-if __name__ == "__main__":
-    build_installer()
+    parser=argparse.ArgumentParser();parser.add_argument('--keep-staging',action='store_true');args=parser.parse_args()
+    app=Path(os.environ['LOCALAPPDATA'])/'Programs/YandexMusic'
+    staging=(ROOT/'dist/staging').resolve();dist=(ROOT/'dist').resolve();out=ROOT/'build/windows';out.mkdir(parents=True,exist_ok=True)
+    assert staging.parent==dist and staging.name=='staging'
+    if staging.exists():shutil.rmtree(staging)
+    def ignore(folder,names):
+        return [n for n in names if n.startswith('.mod-backup-') or n.endswith(('.bak','.tmp','.log')) or n in ('mod-updates','wallpapers','mod_settings.json')]
+    print('Preparing local application payload...',flush=True)
+    shutil.copytree(app,staging,ignore=ignore)
+    patch_report=patch_installation(staging)
+    version=json.loads((ROOT/'src/mod-version.json').read_text(encoding='utf-8'))
+    (out/'version.nsh').write_text('!define MOD_VERSION "'+version['version']+'"\n',encoding='utf-8-sig')
+    compiler=Path(os.environ['WINDIR'])/'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+    subprocess.run([str(compiler),'/nologo','/utf8output','/target:exe','/reference:System.Web.Extensions.dll','/reference:Microsoft.CSharp.dll','/out:'+str(out/'InstallModUpdate.exe'),str(ROOT/'tools/InstallModUpdate.cs')],check=True)
+    proc=subprocess.run([str(ROOT/'tools/nsis/makensis.exe'),'/INPUTCHARSET','UTF8',str(ROOT/'tools/native_installer.nsi')],cwd=ROOT/'tools',stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+    log=proc.stdout.decode('utf-8',errors='replace');(out/'nsis-build.log').write_text(log,encoding='utf-8')
+    if proc.returncode:print(log[-5000:]);raise SystemExit(proc.returncode)
+    installer=dist/f"YandexMusic-Mod-{version['version']}-win-x64.exe"
+    manifest={'version':version['version'],'platform':version['platform'],'installer':installer.name,'size':installer.stat().st_size,'sha256':hashlib.sha256(installer.read_bytes()).hexdigest(),'notes':['Новое компактное меню с поиском, подразделами и отдельным выбором оформления.','Масштаб текста меню до 200%, восстановленные шрифты и размытие.','Обновления мода с проверкой SHA256, резервной копией и сохранением данных.','После сбоя сети проверку обновлений можно повторить сразу.']}
+    (dist/'windows-update.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+    (out/'package-report.json').write_text(json.dumps(patch_report,indent=2),encoding='utf-8')
+    print('Created:',installer.name,'Size:',manifest['size'],'SHA256:',manifest['sha256'],flush=True)
+    if not args.keep_staging:shutil.rmtree(staging)
+if __name__=='__main__':build_installer()

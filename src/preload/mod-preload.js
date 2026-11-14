@@ -116,6 +116,22 @@
     }
 
     electron.contextBridge.exposeInMainWorld("yandexMusicMod", {
+      updater: {
+        state: () => electron.ipcRenderer.invoke('yandexMusicMod.updater.state'),
+        ready: () => electron.ipcRenderer.invoke('yandexMusicMod.updater.ready'),
+        check: () => electron.ipcRenderer.invoke('yandexMusicMod.updater.check'),
+        download: () => electron.ipcRenderer.invoke('yandexMusicMod.updater.download'),
+        cancel: () => electron.ipcRenderer.invoke('yandexMusicMod.updater.cancel'),
+        later: () => electron.ipcRenderer.invoke('yandexMusicMod.updater.later'),
+        skip: () => electron.ipcRenderer.invoke('yandexMusicMod.updater.skip'),
+        install: () => electron.ipcRenderer.invoke('yandexMusicMod.updater.install'),
+        automatic: value => electron.ipcRenderer.invoke('yandexMusicMod.updater.automatic',value),
+        subscribe: callback => {
+          const listener = (_event,state) => callback(state);
+          electron.ipcRenderer.on('yandexMusicMod.updateState',listener);
+          return () => electron.ipcRenderer.removeListener('yandexMusicMod.updateState',listener);
+        }
+      },
       getStorageValue: (key) => electron.ipcRenderer.invoke("yandexMusicMod.getStorageValue", key),
       setStorageValue: (key, value) => electron.ipcRenderer.send("yandexMusicMod.setStorageValue", key, value),
       getAllSettings: () => electron.ipcRenderer.invoke("yandexMusicMod.getAllSettings"),

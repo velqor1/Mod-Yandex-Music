@@ -447,6 +447,17 @@ const BUILTIN_SYNCED_LYRICS = {
 
   let modSettings = {};
 
+  // Adfox sends this creative through postMessage, outside the fetch interceptor.
+  // Match both the exact player-ad iframe and its payload type; keep player messages intact.
+  window.addEventListener("message", function blockBrandedPlayerCreative(event) {
+    if (modSettings["cleaner/hideBanners"] === false) return;
+    const data = event.data;
+    if (!data || typeof data !== "object" || data.type !== "branded_player") return;
+    const slot = document.getElementById("adfox_175861261312993498");
+    const frame = slot && slot.querySelector("iframe");
+    if (frame && event.source === frame.contentWindow) event.stopImmediatePropagation();
+  }, true);
+
   const SECRET_KEY = "kzqU4XhfCaY6B6JTHODeq5";
 
 
@@ -1265,6 +1276,15 @@ const BUILTIN_SYNCED_LYRICS = {
 
         div[data-test-id="NAVBAR_NAVIGATION_ITEM_PLUS"] { display: none !important; }
 
+        /* Sponsored seekbar popover (e.g. the red campaign below the player).
+           Hide only its creative/portal, never PLAYERBAR_DESKTOP or the timeline. */
+        #adfox_175861261312993498,
+        [data-test-id="BRANDED_PLAYER_MODAL"],
+        [class*="BrandedPlayerModal_root__"] {
+          display: none !important;
+          pointer-events: none !important;
+        }
+
       `;
 
     }
@@ -1524,6 +1544,19 @@ const BUILTIN_SYNCED_LYRICS = {
 
   
 
+  function designProfile() {
+    const number = (key,fallback,min,max) => {const value=Number(modSettings[key]);return Number.isFinite(value) && modSettings[key] !== undefined ? Math.max(min,Math.min(max,value)) : fallback;};
+    return {
+      mode: ['modern','classic','compact'].includes(modSettings['design/mode']) ? modSettings['design/mode'] : 'modern',
+      opacity: 1-number('design/modern/transparency',18,0,65)/100,
+      edge: modSettings['design/modern/edge'] !== false,
+      tone: modSettings['design/classic/tone'] === 'coal' ? '#101114' : '#202226',
+      radius: number('design/classic/radius',8,0,16),
+      height: number('design/compact/playerHeight',64,64,80),
+      rowHeight: modSettings['design/compact/rowDensity'] === 'normal' ? 56 : 48
+    };
+  }
+
   function applyTheme(accent = "#8b5cf6", enabled = true) {
 
     try {
@@ -1534,10 +1567,13 @@ const BUILTIN_SYNCED_LYRICS = {
 
 
 
-      if (!enabled || !accent) return;
+      const profile = designProfile();
+      accent = /^#[a-f\d]{6}$/i.test(accent || '') ? accent : '#8b5cf6';
 
 
 
+      document.documentElement.dataset.ymDesignMode = profile.mode;
+      updateGlassSettings();
       const glassBlur = modSettings["design/glassBlur"] || "medium";
 
       const cardHover = modSettings["design/cardHoverFx"] !== false;
@@ -1565,12 +1601,13 @@ const BUILTIN_SYNCED_LYRICS = {
         blurCss = "backdrop-filter: blur(44px) saturate(220%) !important; -webkit-backdrop-filter: blur(44px) saturate(220%) !important;";
 
       }
+      if (profile.mode !== 'modern') blurCss = 'backdrop-filter:none!important;-webkit-backdrop-filter:none!important;';
 
 
 
       let extra = "";
 
-      if (cardHover) {
+      if (cardHover && profile.mode === 'modern') {
 
         extra += `
 
@@ -1646,11 +1683,11 @@ const BUILTIN_SYNCED_LYRICS = {
 
       }
 
-      if (playerGlow) {
+      if (playerGlow && profile.mode === 'modern') {
 
         extra += `
 
-          div[class*="PlayerBarDesktop_root"], footer[class*="PlayerBar_root"] {
+          div[class*="PlayerBarDesktop_root"], div[class*="PlayerBarDesktopWithBackgroundProgressBar_root__"] {
 
             box-shadow: 0 -4px 30px ${accent}33 !important;
 
@@ -1662,7 +1699,7 @@ const BUILTIN_SYNCED_LYRICS = {
 
       }
 
-      if (glowProgress) {
+      if (glowProgress && profile.mode === 'modern') {
 
         extra += `
 
@@ -1717,14 +1754,13 @@ const BUILTIN_SYNCED_LYRICS = {
       style.textContent = `
 
         :root {
+          --ym-glass-opacity: ${profile.opacity};
+          --ym-classic-tone: ${profile.tone};
+          --ym-classic-radius: ${profile.radius}px;
+          --ym-compact-player-height: ${profile.height}px;
+          --ym-compact-row-height: ${profile.rowHeight}px;
 
-          --yandexMusicModAccent: ${accent} !important;
-
-          --accent: ${accent} !important;
-
-          --accent-glow: ${accent}55 !important;
-
-          --ym-accent: ${accent} !important;
+          ${enabled ? `--yandexMusicModAccent:${accent}!important;--accent:${accent}!important;--accent-glow:${accent}55!important;--ym-accent:${accent}!important;` : ''}
 
         }
 
@@ -1734,13 +1770,31 @@ const BUILTIN_SYNCED_LYRICS = {
 
         }
 
-        .ym-mod-modal, div[class*="NavbarDesktop_root"], div[class*="PlayerBarDesktop_root"] {
+        .ym-mod-modal,  div[class*="PlayerBarDesktop_root"], div[class*="PlayerBarDesktopWithBackgroundProgressBar_root__"] {
 
           ${blurCss}
 
         }
 
         ${extra}
+
+        /* Native audio player in 5.124.1 is PlayerBarDesktopWithBackgroundProgressBar. */
+        html[data-ym-design-mode="modern"] :is(div[class*="PlayerBarDesktop_root"],div[class*="PlayerBarDesktopWithBackgroundProgressBar_root__"]) {
+          background-color:rgba(27,29,33,${profile.opacity})!important;
+          ${profile.edge ? 'border:1px solid #ffffff29!important;' : 'border:1px solid transparent!important;'}
+        }
+        html[data-ym-design-mode="modern"] :is(div[class*="PlayerBarDesktop_root"],div[class*="PlayerBarDesktopWithBackgroundProgressBar_root__"]) {border-radius:18px!important;}
+        html[data-ym-design-mode="classic"] :is(div[class*="PlayerBarDesktop_root"],div[class*="PlayerBarDesktopWithBackgroundProgressBar_root__"]) {
+          background:var(--ym-classic-tone)!important;--player-average-color-background:var(--ym-classic-tone)!important;
+          backdrop-filter:none!important;box-shadow:none!important;border:1px solid #ffffff18!important;border-radius:var(--ym-classic-radius)!important;
+        }
+        html[data-ym-design-mode="compact"] {--player-bar-height:var(--ym-compact-player-height)!important;}
+        html[data-ym-design-mode="compact"] :is(div[class*="PlayerBarDesktop_root"],div[class*="PlayerBarDesktopWithBackgroundProgressBar_root__"]) {
+          background:#181a1e!important;--player-average-color-background:#181a1e!important;backdrop-filter:none!important;box-shadow:none!important;border:1px solid #ffffff18!important;border-radius:6px!important;
+        }
+        html[data-ym-design-mode="compact"] :is(div[class*="PlayerBarDesktop_root"],div[class*="PlayerBarDesktopWithBackgroundProgressBar_root__"]) {height:var(--ym-compact-player-height)!important;min-height:var(--ym-compact-player-height)!important;--player-cover-width:40px;--player-cover-height:40px;}
+        html[data-ym-design-mode="compact"] [class*="HorizontalCardContainer_root"] {--horizontal-card-height:var(--ym-compact-row-height);}
+        html:not([data-ym-design-mode="modern"]) :is(#ym-top-trackbar,#ym-top-trackbar-fill,#ym-top-trackbar-thumb) {box-shadow:none!important;filter:none!important;}
 
       `;
 
@@ -2942,6 +2996,39 @@ const BUILTIN_SYNCED_LYRICS = {
   let amFsScrollAnimFrame = null;
   let amFsProgressTimer = null;
 
+  function closeLegacyNativeFullscreenModal() {
+    try {
+      const nativeClose = document.querySelector('[data-test-id="FULLSCREEN_PLAYER_CLOSE_BUTTON"]');
+      if (nativeClose) {
+        try {
+          const fiber = findFiberNode(nativeClose);
+          if (fiber && fiber.memoizedProps && typeof fiber.memoizedProps.onClick === "function") {
+            fiber.memoizedProps.onClick({ stopPropagation: () => {}, preventDefault: () => {} });
+          }
+        } catch (e) {}
+        try { nativeClose.click(); } catch (e) {}
+      }
+      const oldModal = document.querySelector('[data-test-id="FULLSCREEN_PLAYER_MODAL"]');
+      if (oldModal) {
+        try {
+          const fiber = findFiberNode(oldModal);
+          let curr = fiber;
+          for (let d = 0; d < 30 && curr; d++) {
+            if (curr.memoizedProps && curr.memoizedProps.modal && typeof curr.memoizedProps.modal.close === "function") {
+              curr.memoizedProps.modal.close();
+              break;
+            }
+            curr = curr.return;
+          }
+        } catch (e) {}
+        oldModal.style.setProperty("display", "none", "important");
+        setTimeout(() => {
+          if (oldModal && oldModal.parentNode) oldModal.remove();
+        }, 80);
+      }
+    } catch (e) {}
+  }
+
   function toggleAppleMusicFullscreen(force) {
     try {
     amFsVisible = typeof force === "boolean" ? force : !amFsVisible;
@@ -2962,8 +3049,11 @@ const BUILTIN_SYNCED_LYRICS = {
         cancelAnimationFrame(amFsScrollAnimFrame);
         amFsScrollAnimFrame = null;
       }
+      closeLegacyNativeFullscreenModal();
       return;
     }
+
+    closeLegacyNativeFullscreenModal();
 
     if (!fs) {
       fs = document.createElement("div");
@@ -3615,6 +3705,14 @@ const BUILTIN_SYNCED_LYRICS = {
 
   // Intercept click on album artwork / title / fullscreen buttons to open Apple Music Fullscreen
   document.addEventListener("click", (e) => {
+    // 0. Explicitly allow and prioritize native close buttons (Never hijack them!)
+    const nativeClose = e.target.closest('[data-test-id="FULLSCREEN_PLAYER_CLOSE_BUTTON"], [data-test-id*="CLOSE" i], [aria-label*="закрыть" i], [aria-label*="close" i]');
+    if (nativeClose) {
+      if (amFsVisible) toggleAppleMusicFullscreen(false);
+      closeLegacyNativeFullscreenModal();
+      return;
+    }
+
     // 1. Cover container in player bar
     const coverTarget = e.target.closest(
       '[data-test-id="PLAYERBAR_DESKTOP_COVER_CONTAINER"], [data-test-id="ENTITY_COVER_IMAGE"], [class*="SonataTrackInfo_cover"], [class*="TrackCover"]'
@@ -3623,18 +3721,20 @@ const BUILTIN_SYNCED_LYRICS = {
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
+      closeLegacyNativeFullscreenModal();
       toggleAppleMusicFullscreen(true);
       return;
     }
 
-    // 2. Fullscreen buttons
+    // 2. Fullscreen open buttons (STRICTLY exclude close, queue, and context menu buttons!)
     const fsBtn = e.target.closest(
-      '[data-test-id="FULLSCREEN_BUTTON"], [data-test-id="FULLSCREEN_PLAYER_BUTTON"], button[data-test-id*="FULLSCREEN" i], button[aria-label*="Полноэкранный" i], button[aria-label*="полноэкранный" i], button[aria-label*="fullscreen" i], [class*="FullscreenPlayerDesktopButton"], [class*="fullscreenPlayerButton"]'
+      'button[data-test-id="FULLSCREEN_PLAYER_BUTTON"], button[data-test-id="FULLSCREEN_BUTTON"], button[aria-label="Полноэкранный режим"], button[aria-label="Во весь экран"], button[aria-label*="fullscreen" i], [class*="FullscreenPlayerDesktopButton"], [class*="fullscreenPlayerButton"]'
     );
     if (fsBtn) {
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
+      closeLegacyNativeFullscreenModal();
       toggleAppleMusicFullscreen();
       return;
     }
@@ -3643,15 +3743,23 @@ const BUILTIN_SYNCED_LYRICS = {
 
   // Global hotkeys: 'F' toggles Fullscreen, 'Esc' closes Fullscreen
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && amFsVisible) {
-      e.preventDefault();
-      e.stopPropagation();
-      toggleAppleMusicFullscreen(false);
-      return;
+    if (e.key === "Escape") {
+      let handled = false;
+      if (amFsVisible) {
+        toggleAppleMusicFullscreen(false);
+        handled = true;
+      }
+      closeLegacyNativeFullscreenModal();
+      if (handled) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
     }
     if ((e.key === "f" || e.key === "F" || e.key === "а" || e.key === "А") && !e.ctrlKey && !e.metaKey && !e.altKey) {
       if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.isContentEditable)) return;
       e.preventDefault();
+      closeLegacyNativeFullscreenModal();
       toggleAppleMusicFullscreen();
       return;
     }
@@ -3660,43 +3768,74 @@ const BUILTIN_SYNCED_LYRICS = {
     // ==========================================
   // v1.3.2: AUTO-UPDATER & COMMUNITY STATS
   // ==========================================
-  const CURRENT_MOD_VERSION = "v1.5.0";
-
-  async function checkModUpdates() {
-    try {
-      const res = await fetch("https://api.github.com/repos/velqor1/Mod-Yandex-Music/releases/latest", {
-        headers: { "Accept": "application/vnd.github.v3+json" }
+  let currentModVersion = '';
+  let modUpdateState = null;
+  let updateBridgeStarted = false;
+  function updateVersionLabels() {
+    if (!currentModVersion) return;
+    document.querySelectorAll('.ym-glass-version,.ym-mod-ver-tag,[data-mod-version]').forEach(el => el.textContent = 'v' + currentModVersion);
+    const logo = document.querySelector('#ym-mod-modal .ym-modal-logo'); if (logo) logo.title = 'Версия ' + currentModVersion;
+  }
+  function initModUpdates() {
+    const api = window.yandexMusicMod?.updater; if (!api) return;
+    if (!updateBridgeStarted) {
+      updateBridgeStarted = true;
+      api.subscribe(renderModUpdate);
+      window.addEventListener('focus', () => api.state().then(renderModUpdate).catch(() => {}));
+      api.ready().then(() => api.state()).then(renderModUpdate).catch(() => {});
+    }
+    api.state().then(renderModUpdate).catch(() => {});
+  }
+  function renderModUpdate(state) {
+    modUpdateState = state; currentModVersion = state.version; updateVersionLabels();
+    const status = document.getElementById('ym-update-status'), auto = document.getElementById('opt-mod-auto-updates');
+    if (auto) auto.checked = state.auto;
+    const messages = {idle:'Проверка ещё не выполнялась',checking:'Проверяем обновления…',current:state.compatible ? 'Установлена актуальная версия' : 'Новых Windows-релизов с обновлятором пока нет',available:'Доступна версия ' + state.update?.version,downloading:'Загрузка: ' + Math.floor((state.progress || 0)*100) + '%',ready:'Обновление готово к установке',error:state.manual || state.offer ? state.error : 'Проверка временно недоступна'};
+    if (status) status.textContent = messages[state.status] || '';
+    const check = document.getElementById('btn-check-mod-update'); if(check) {check.disabled = state.status === 'checking'; check.textContent = ['ready','available','downloading'].includes(state.status) ? 'Открыть обновление' : 'Проверить обновления';}
+    document.querySelector('[data-tab="tab-about"]')?.classList.toggle('ym-has-update',!!state.update);
+    if (state.offer && state.update && state.presentationAllowed && canPresentModUpdate()) showModUpdateDialog(state);
+    else if (document.getElementById('ym-mod-update-dialog') && !state.offer) closeModUpdateDialog();
+  }
+  function canPresentModUpdate() {
+    return document.hasFocus() && !document.hidden && !document.querySelector('input[type="password"],iframe[src*="passport"],#ym-proposal-modal') && !/passport|oauth|login/i.test(location.href);
+  }
+  let updateReturnFocus = null;
+  function closeModUpdateDialog() {
+    document.getElementById('ym-mod-update-dialog')?.remove();
+    const menu = document.getElementById('ym-mod-modal-backdrop'); if(menu) menu.inert = !menu.classList.contains('open');
+    updateReturnFocus?.isConnected && updateReturnFocus.focus({preventScroll:true});
+  }
+  function showModUpdateDialog(state) {
+    let layer = document.getElementById('ym-mod-update-dialog');
+    if (!layer) {
+      updateReturnFocus = document.activeElement;
+      layer = document.createElement('div');layer.id = 'ym-mod-update-dialog';
+      layer.innerHTML = `<section role="dialog" aria-modal="true" aria-labelledby="ym-update-title" class="ym-update-panel"><span class="ym-update-eyebrow">МУЗЫКА MOD</span><h2 id="ym-update-title">Есть обновление</h2><p id="ym-update-versions"></p><ul id="ym-update-notes"></ul><p id="ym-update-size"></p><p id="ym-update-message" role="status" aria-live="polite"></p><progress max="1" id="ym-update-progress" hidden></progress><div class="ym-update-actions"><button id="ym-update-primary">Скачать обновление</button><button id="ym-update-later">Позже</button><button id="ym-update-skip">Пропустить эту версию</button><button id="ym-update-cancel" hidden>Отменить загрузку</button></div></section>`;
+      document.body.append(layer);
+      const menu = document.getElementById('ym-mod-modal-backdrop'); if(menu)menu.inert = true;
+      layer.querySelector('#ym-update-primary').onclick = async () => {
+        const api=window.yandexMusicMod.updater;
+        try {renderModUpdate(await (modUpdateState.status === 'ready' ? api.install() : api.download()));}
+        catch(e) {layer.querySelector('#ym-update-message').textContent = 'Не удалось запустить обновление. Попробуйте ещё раз.';}
+      };
+      layer.querySelector('#ym-update-later').onclick = () => {window.yandexMusicMod.updater.later().then(renderModUpdate);closeModUpdateDialog();};
+      layer.querySelector('#ym-update-skip').onclick = () => {window.yandexMusicMod.updater.skip().then(renderModUpdate);closeModUpdateDialog();};
+      layer.querySelector('#ym-update-cancel').onclick = () => window.yandexMusicMod.updater.cancel();
+      layer.addEventListener('keydown',e => {
+        if(e.key === 'Escape') {e.stopPropagation();layer.querySelector('#ym-update-later').click();}
+        if(e.key === 'Tab') {const b=[...layer.querySelectorAll('button')].filter(x=>!x.hidden&&!x.disabled);const first=b[0],last=b[b.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}
       });
-      if (!res.ok) return;
-      const release = await res.json();
-      const latestTag = release.tag_name || "";
-      if (latestTag && latestTag !== CURRENT_MOD_VERSION && isNewerVersion(latestTag, CURRENT_MOD_VERSION)) {
-        showUpdateBanner(latestTag, release.html_url);
-      }
-    } catch (e) {}
-  }
-
-  function isNewerVersion(remote, local) {
-    const parse = (v) => v.replace(/^v/, "").split(".").map((n) => parseInt(n, 10) || 0);
-    const [rMaj, rMin, rPat] = parse(remote);
-    const [lMaj, lMin, lPat] = parse(local);
-    if (rMaj !== lMaj) return rMaj > lMaj;
-    if (rMin !== lMin) return rMin > lMin;
-    return rPat > lPat;
-  }
-
-  function showUpdateBanner(newVersion, downloadUrl) {
-    if (document.getElementById("ym-mod-update-banner")) return;
-    const banner = document.createElement("div");
-    banner.id = "ym-mod-update-banner";
-    banner.innerHTML = `
-      <span class="ym-update-badge">NEW</span>
-      <span class="ym-update-text">Доступно обновление мода <b>${escapeHtml(newVersion)}</b>!</span>
-      <a href="${downloadUrl}" target="_blank" class="ym-update-btn">Скачать</a>
-      <button class="ym-update-close" id="ym-mod-update-close">&times;</button>
-    `;
-    document.body.appendChild(banner);
-    document.getElementById("ym-mod-update-close")?.addEventListener("click", () => banner.remove());
+      layer.querySelector('#ym-update-primary').focus();
+    }
+    const select = id => layer.querySelector('#ym-update-'+id);
+    select('versions').textContent = 'v' + state.version + ' → v' + state.update.version;
+    select('notes').replaceChildren(...state.update.notes.map(text => {const li=document.createElement('li');li.textContent=text;return li;}));
+    select('size').textContent = (state.update.size / 1024 / 1024).toFixed(1) + ' МБ · настройки и аккаунт сохранятся';
+    select('message').textContent = state.status === 'error' ? state.error : state.status === 'ready' ? 'Готово. Установка закроет и заново откроет Музыку.' : state.status === 'downloading' ? 'Загрузка: ' + Math.floor((state.progress||0)*100) + '%' : '';
+    select('progress').hidden = state.status !== 'downloading';select('progress').value = state.progress || 0;
+    select('primary').hidden = state.status === 'downloading'; select('primary').textContent = state.status === 'ready' ? 'Установить и перезапустить' : state.status === 'error' ? 'Повторить загрузку' : 'Скачать обновление';
+    select('cancel').hidden = state.status !== 'downloading';select('skip').hidden = ['downloading','ready'].includes(state.status);
   }
 
   // ==========================================
@@ -3726,25 +3865,8 @@ const BUILTIN_SYNCED_LYRICS = {
     return false;
   }
 
-  function injectCreatorBadge() {
-    if (!isCurrentUserAdmin()) return;
-    const userContainer = document.querySelector('div[class*="NavbarDesktopUserWidget_userProfileContainer"], aside [data-test-id="USER_PROFILE"]');
-    if (!userContainer) return;
-
-    // Remove old yellow badge if present
-    const oldBadge = userContainer.querySelector(".ym-creator-badge");
-    if (oldBadge) oldBadge.remove();
-
-    const nameElem = userContainer.querySelector('div[class*="NavbarDesktopUserWidget_userName"], span[class*="userName"], div[class*="userProfile"] span') || userContainer;
-    if (nameElem && !nameElem.querySelector(".ym-creator-crown") && !userContainer.querySelector(".ym-creator-crown")) {
-      const crown = document.createElement("span");
-      crown.className = "ym-creator-crown";
-      crown.title = "Создатель мода";
-      crown.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="#ff2d3c" style="filter:drop-shadow(0 0 6px rgba(255,45,60,0.9));margin-left:6px;vertical-align:middle;display:inline-block;"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg>`;
-      nameElem.appendChild(crown);
-    }
-  }
-  setInterval(injectCreatorBadge, 3000);
+  // Creator tools stay available in settings; no badge is attached to the profile.
+  document.querySelectorAll('.ym-creator-crown,.ym-creator-badge').forEach(badge => badge.remove());
 
     function openProposalModal() {
     if (document.getElementById("ym-proposal-modal")) return;
@@ -3847,7 +3969,7 @@ const BUILTIN_SYNCED_LYRICS = {
       // Refresh admin tab if visible
       loadAdminProposals();
 
-      const bodyText = `${desc}\n\n---\n**Контакт автора:** ${contact || "Не указан"}\n**Версия мода:** v1.5.0`;
+      const bodyText = `${desc}\n\n---\n**Контакт автора:** ${contact || "Не указан"}\n**Версия мода:** ${currentModVersion}`;
       const issueUrl = `https://github.com/velqor1/Mod-Yandex-Music/issues/new?title=${encodeURIComponent("[Идея] " + title)}&body=${encodeURIComponent(bodyText)}&labels=suggestion`;
 
       try {
@@ -3996,6 +4118,27 @@ const BUILTIN_SYNCED_LYRICS = {
     if (el) el.remove();
   }
 
+  function measureNativeTextSizes(scope = document.body, reset = false) {
+    if (!scope) return;
+    const sheet = document.getElementById(FONT_STYLESHEET_ID);
+    if (sheet) sheet.disabled = true;
+    try {
+      const elements = [scope, ...scope.querySelectorAll('span,p,a,button,label,input,select,textarea,h1,h2,h3,h4,div')];
+      let count = 0;
+      for (const el of elements) {
+        if (count >= 3000) break;
+        if (el.closest('#ym-mod-modal,#ym-mod-update-dialog,#ym-proposal-modal,#ym-am-fs-root,#ym-am-lyrics-modal,.karaoke-banner,.overlay-card') || el.matches('script,style,svg')) continue;
+        if (!reset && el.hasAttribute('data-ym-native-text-size')) continue;
+        if (!el.matches('input,select,textarea') && ![...el.childNodes].some(node => node.nodeType === 3 && node.textContent.trim())) continue;
+        const size = parseFloat(getComputedStyle(el).fontSize);
+        if (Number.isFinite(size) && size > 0) {
+          el.style.setProperty('--ym-native-font-size', `${size}px`);
+          el.setAttribute('data-ym-native-text-size', ''); count++;
+        }
+      }
+    } finally { if (sheet) sheet.disabled = false; }
+  }
+
     function applyFont(fontName, enabled = true) {
     ensureBaseStylesheet();
 
@@ -4033,8 +4176,6 @@ const BUILTIN_SYNCED_LYRICS = {
 
     document.body.setAttribute("data-ym-font", fontEffectTag);
 
-    if (!enabled) return;
-
     let fontFamily = "Terraria";
     let extraCss = "";
 
@@ -4067,33 +4208,45 @@ const BUILTIN_SYNCED_LYRICS = {
     }
 
     fontFamily = String(fontFamily).replace(/["'{}<>;\\]/g, "").trim() || "JetBrains Mono";
+    if (!enabled) fontFamily = "Yandex Sans";
+    if (modSettings['settings/useAppFont'] !== true && extraCss) {
+      extraCss = extraCss.replaceAll('*:not(.UserID-Avatar-Image):not(img)', '*:not(.UserID-Avatar-Image):not(img):where(:not(#ym-mod-modal):not(#ym-mod-modal *))');
+    }
 
     const rawSizeScale = parseFloat(modSettings["font-changer/sizeScale"]);
     let fontSizeScale = (!isNaN(rawSizeScale) && isFinite(rawSizeScale)) ? Math.max(0.7, Math.min(1.5, rawSizeScale)) : 1.0;
 
     const rawModalScale = parseFloat(modSettings["font-changer/modalSizeScale"]);
-    let modalSizeScale = (!isNaN(rawModalScale) && isFinite(rawModalScale)) ? Math.max(0.7, Math.min(1.5, rawModalScale)) : 1.0;
+    const modalSizeScale = (!isNaN(rawModalScale) && isFinite(rawModalScale)) ? Math.max(0.7, Math.min(2, rawModalScale)) : 1.0;
+    document.getElementById('ym-mod-modal')?.setAttribute('data-large-text', String(modalSizeScale > 1.4));
 
     const fontWeight = modSettings["font-changer/weight"] || "normal";
     const letterSpacing = modSettings["font-changer/letterSpacing"] || "normal";
+    const rootStyle = document.documentElement.style;
+    rootStyle.setProperty('--ym-mod-font-family', `"${fontFamily}", "Segoe UI", sans-serif`);
+    rootStyle.setProperty('--ym-mod-menu-scale', String(modalSizeScale));
+    rootStyle.setProperty('--ym-mod-letter-spacing', letterSpacing);
+    rootStyle.setProperty('--ym-mod-app-scale', String(fontSizeScale));
+    measureNativeTextSizes(document.body, true);
 
-    const fontRule = (fontName && fontName !== "Yandex Sans (Original)") 
+    const fontRule = (enabled && fontName && fontName !== "Yandex Sans (Original)")
       ? `font-family: "${fontFamily}", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;` 
       : "";
 
-    const sizeRule = fontSizeScale !== 1.0 ? `font-size: calc(1em * ${fontSizeScale}) !important;` : "";
+    const sizeRule = ""; // Native sizes are measured once; nested elements must not multiply the scale.
     const weightRule = fontWeight !== "normal" ? `font-weight: ${fontWeight} !important;` : "";
     const spacingRule = letterSpacing !== "normal" ? `letter-spacing: ${letterSpacing} !important;` : "";
 
     const style = document.createElement("style");
     style.id = FONT_STYLESHEET_ID;
     style.textContent = `
-      * {
+      *${modSettings['settings/useAppFont'] === true ? '' : ':where(:not(#ym-mod-modal):not(#ym-mod-modal *))'} {
         ${fontRule}
         ${sizeRule}
         ${weightRule}
         ${spacingRule}
       }
+      [data-ym-native-text-size] { font-size: calc(var(--ym-native-font-size) * ${fontSizeScale}) !important; }
       *, *::before, *::after,
       html, body,
       button, input, select, textarea,
@@ -4121,17 +4274,48 @@ const BUILTIN_SYNCED_LYRICS = {
       .ym-am-title,
       .ym-am-artist,
       .ym-am-time,
+      #ym-am-fs-root,
+      #ym-am-fs-root *,
+      .ym-am-fs-root,
+      .ym-am-fs-root *,
+      .ym-am-fs-line,
+      .ym-am-fs-line *,
+      .ym-am-fs-lyrics,
+      .ym-am-fs-lyrics *,
+      .ym-am-fs-title,
+      .ym-am-fs-artist,
+      .ym-am-fs-album,
+      .ym-am-fs-time,
+      .ym-am-fs-meta,
+      .ym-am-fs-meta *,
       .overlay-card,
       .overlay-card *,
       .karaoke-banner,
       .karaoke-banner * {
-        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif !important;
-        letter-spacing: normal !important;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Rounded", "SF Pro Display", "SF Pro Text", "Helvetica Neue", "Inter", "Segoe UI", Roboto, sans-serif !important;
+        letter-spacing: -0.02em !important;
         text-transform: none !important;
+      }
+      /* ANTI-OVERLAP ISOLATION FOR TRACKLIST DURATION */
+      [data-test-id="TRACK_DURATION"],
+      span[class*="CommonControlsBar_duration"],
+      [class*="CommonControlsBar_duration"] {
+        letter-spacing: normal !important;
+        font-variant-numeric: tabular-nums !important;
+        white-space: nowrap !important;
       }
       ${extraCss}
     `;
     (document.head || document.documentElement).appendChild(style);
+    updateGlassSettings();
+    if (!window.__ymNativeFontObserver) {
+      window.__ymNativeFontObserver = new MutationObserver(records => {
+        for (const record of records) for (const node of record.addedNodes)
+          if (node.nodeType === 1 && !node.closest('#ym-mod-modal') && node.tagName !== 'STYLE') measureNativeTextSizes(node);
+      });
+      window.__ymNativeFontObserver.observe(document.body, {childList: true, subtree: true});
+      window.addEventListener('resize', () => measureNativeTextSizes(document.body, true));
+    }
   }
 
   function applyHiddenMenuItems() {
@@ -4858,7 +5042,7 @@ const BUILTIN_SYNCED_LYRICS = {
           background-color: transparent !important;
         }
         /* Completely transparent left sidebar */
-        aside, [data-test-id="NAVBAR"], [class*="DefaultLayout_navbar"], [class*="Navbar_root"], [class*="NavbarDesktop_root"], [class*="SideNavigation_root"], [class*="Navigation_root"], nav, .ym-mod-sidebar-container {
+        aside, [data-test-id="NAVBAR"], [class*="DefaultLayout_navbar"], [class*="Navbar_root"], [class*="NavbarDesktop_root"], [class*="SideNavigation_root"], [class*="Navigation_root"], nav:not(#ym-mod-modal nav), .ym-mod-sidebar-container {
           background: transparent !important;
           background-color: transparent !important;
           backdrop-filter: none !important;
@@ -4873,7 +5057,7 @@ const BUILTIN_SYNCED_LYRICS = {
           background-image: none !important;
           box-shadow: none !important;
         }
-        aside *, [data-test-id="NAVBAR"] *, [class*="Navbar_root"] *, [class*="DefaultLayout_navbar"] *, [class*="NavbarDesktop_root"] *, [class*="NavbarDesktop_"] *, nav * {
+        aside *, [data-test-id="NAVBAR"] *, [class*="Navbar_root"] *, [class*="DefaultLayout_navbar"] *, [class*="NavbarDesktop_root"] *, [class*="NavbarDesktop_"] *, nav:not(#ym-mod-modal nav) * {
           background: transparent !important;
           background-color: transparent !important;
           box-shadow: none !important;
@@ -5380,6 +5564,162 @@ const BUILTIN_SYNCED_LYRICS = {
 
   // ==========================================
 
+  function initGlassSettings(backdrop) {
+    const modal = backdrop.querySelector('#ym-mod-modal'), search = modal.querySelector('#ym-settings-search');
+    const nav = modal.querySelector('.ym-modal-tabs'), scroller = modal.querySelector('.ym-modal-content');
+    const subnav = modal.querySelector('.ym-settings-subnav');
+    const panes = [...modal.querySelectorAll('.ym-tab-pane')], buttons = [...nav.querySelectorAll('[data-tab]')];
+    const titles = Object.fromEntries(buttons.map(b=>[b.dataset.tab,(b.querySelector('.ym-hub-label') || b.querySelector('span') || b).textContent.trim()]));
+    modal.querySelectorAll('[data-setting]').forEach(input => {
+      const key = input.dataset.setting;
+      const fallback = input.type === 'checkbox' ? input.defaultChecked : input.value;
+      const value = modSettings[key] ?? fallback;
+      if(input.type === 'checkbox') input.checked = !!value; else input.value = value;
+      const output = input.closest('.ym-range-wrap')?.querySelector('output');
+      const show = () => {if(output) output.textContent = input.value + (input.dataset.unit || '');};
+      show();
+      input.addEventListener(input.type === 'range' ? 'input' : 'change',() => {
+        const value = input.type === 'checkbox' ? input.checked : input.type === 'range' || input.hasAttribute('data-number') ? Number(input.value) : input.value;
+        show();saveSetting(key,value);applyTheme(modSettings['custom-themes/accent'] || '#8b5cf6',modSettings['custom-themes/enabled'] !== false);
+        if(key==='settings/useAppFont')applyFont(modSettings['font-changer/savedFont'],modSettings['font-changer/enabled']!==false);
+      });
+    });
+    modal.querySelectorAll('[data-choice-select]').forEach(group => {
+      const input = document.getElementById(group.dataset.choiceSelect);
+      const choices = [...group.querySelectorAll('[data-value]')];
+      const indicator = group.querySelector('.ym-choice-indicator');
+      const position = () => {
+        const active = choices.find(button => button.dataset.value === input.value);
+        if (!active || !active.offsetWidth) return;
+        indicator.style.width = active.offsetWidth + 'px';
+        indicator.style.height = active.offsetHeight + 'px';
+        indicator.style.transform = `translate(${active.offsetLeft}px,${active.offsetTop}px)`;
+        if (!group.dataset.positioned) requestAnimationFrame(() => {group.dataset.positioned = 'true';});
+      };
+      const key = input.id === 'opt-design-mode' ? 'design/mode' : 'design/glassBlur';
+      input.value = modSettings[key] || (input.id === 'opt-design-mode' ? 'modern' : 'medium');
+      const sync = () => {choices.forEach(button => {
+        const active = button.dataset.value === input.value;
+        button.setAttribute('aria-checked',String(active));button.tabIndex = active ? 0 : -1;
+      });position();};
+      choices.forEach(button => button.addEventListener('click',() => {
+        input.value = button.dataset.value;
+        input.dispatchEvent(new Event('change',{bubbles:true}));
+      }));
+      group.addEventListener('keydown',event => {
+        const index = choices.indexOf(document.activeElement);
+        if(index < 0 || !['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+        event.preventDefault();
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? choices.length-1 : (index+(event.key==='ArrowLeft'?-1:1)+choices.length)%choices.length;
+        choices[next].click();choices[next].focus();
+      });
+      input.addEventListener('change',sync);sync();
+      new ResizeObserver(position).observe(group);
+    });
+    const rememberedPane = localStorage.getItem('ym-mod-hub-layout') === '1' ? localStorage.getItem('ym-mod-section') || 'home' : 'home';
+    localStorage.setItem('ym-mod-hub-layout','1');
+    let currentPane = null, currentSubsection = '';
+    let subsections;try{subsections=JSON.parse(localStorage.getItem('ym-mod-subsections')||'{}');}catch{subsections={};}
+    let positions;try{positions=JSON.parse(localStorage.getItem('ym-mod-scroll')||'{}');}catch{positions={};}
+    const results = modal.querySelector('.ym-glass-results');
+    const positionKey = () => currentPane + (currentSubsection ? '/'+currentSubsection : '');
+    function select(id,subsection) {
+      if(id!=='home' && !panes.some(p=>p.id===id))id='home';
+      if(currentPane && !search.value){positions[positionKey()]=(currentPane==='home'?nav:scroller).scrollTop;localStorage.setItem('ym-mod-scroll',JSON.stringify(positions));}
+      const keepFocus = subnav.contains(document.activeElement);
+      currentPane=id;localStorage.setItem('ym-mod-section',id); search.value='';results.hidden=true;
+      nav.hidden=id!=='home';modal.querySelector('.ym-glass-settings').hidden=id==='home';
+      modal.dataset.page=id;
+      buttons.forEach(b=>{const active=b.dataset.tab===id;b.classList.toggle('active',active);b.tabIndex=0;});
+      panes.forEach(p=>{p.hidden=p.id!==id;p.classList.toggle('active',p.id===id);});
+      if(id==='home'){currentSubsection='';subnav.hidden=true;nav.scrollTop=positions.home||0;return;}
+      modal.querySelector('#ym-glass-page-title').textContent=titles[id];
+      const sections = [...document.getElementById(id).querySelectorAll(':scope > [data-subsection]')];
+      const requested = subsection || subsections[id];
+      currentSubsection = sections.some(s=>s.dataset.subsection===requested) ? requested : sections[0]?.dataset.subsection || '';
+      subsections[id]=currentSubsection;localStorage.setItem('ym-mod-subsections',JSON.stringify(subsections));
+      subnav.replaceChildren();subnav.hidden=sections.length<2;
+      sections.forEach(section => {
+        const active=section.dataset.subsection===currentSubsection;section.hidden=!active;
+        const button=document.createElement('button');button.type='button';button.role='tab';button.dataset.subtarget=section.dataset.subsection;
+        button.id='ym-subtab-'+section.id;
+        button.textContent=section.dataset.title;button.setAttribute('aria-selected',String(active));button.setAttribute('aria-controls',section.id);button.tabIndex=active?0:-1;
+        button.onclick=()=>select(id,section.dataset.subsection);subnav.append(button);
+        section.setAttribute('role','tabpanel');section.setAttribute('aria-labelledby',button.id);
+      });
+      scroller.scrollTop=positions[positionKey()] ?? positions[id] ?? 0;
+      if(keepFocus)subnav.querySelector('[aria-selected="true"]')?.focus();
+    }
+    scroller.addEventListener('scroll',()=>{if(search.value)return;positions[positionKey()]=scroller.scrollTop;localStorage.setItem('ym-mod-scroll',JSON.stringify(positions));},{passive:true});
+    nav.addEventListener('scroll',()=>{if(currentPane==='home'){positions.home=nav.scrollTop;localStorage.setItem('ym-mod-scroll',JSON.stringify(positions));}},{passive:true});
+    modal.querySelector('#ym-settings-home').addEventListener('click',()=>{select('home');nav.querySelector('button')?.focus({preventScroll:true});});
+    subnav.addEventListener('keydown',event => {
+      const tabs=[...subnav.querySelectorAll('button')],index=tabs.indexOf(document.activeElement);
+      if(index<0||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+      event.preventDefault();const next=event.key==='Home'?0:event.key==='End'?tabs.length-1:(index+(event.key==='ArrowLeft'?-1:1)+tabs.length)%tabs.length;
+      tabs[next].click();subnav.querySelector('[aria-selected="true"]')?.focus();
+    });
+    buttons.forEach(b=>{b.setAttribute('aria-controls',b.dataset.tab);b.addEventListener('click',()=>{select(b.dataset.tab);modal.querySelector('#ym-glass-page-title').focus({preventScroll:true});});});
+    panes.forEach(p=>{p.setAttribute('role','region');p.setAttribute('aria-labelledby','ym-glass-page-title');});
+    nav.addEventListener('keydown',e=>{const visible=buttons.filter(b=>!b.hidden),i=visible.indexOf(document.activeElement);if(i<0||!['ArrowUp','ArrowDown','Home','End'].includes(e.key))return;e.preventDefault();const n=e.key==='Home'?0:e.key==='End'?visible.length-1:(i+(e.key==='ArrowUp'?-1:1)+visible.length)%visible.length;visible[n].focus();});
+    const normalize=t=>t.toLocaleLowerCase('ru').replace(/ё/g,'е').trim();
+    const entries=[...modal.querySelectorAll('.ym-row')].map(row=>({row,pane:row.closest('.ym-tab-pane'),title:row.querySelector('.ym-label')?.textContent.trim(),detail:row.querySelector('.ym-desc')?.textContent.trim()||''})).filter(x=>x.title&&x.pane);
+    search.addEventListener('input',()=>{
+      const q=normalize(search.value);if(!q){select(currentPane,currentSubsection);return;}
+      nav.hidden=true;modal.querySelector('.ym-glass-settings').hidden=false;modal.dataset.page='search';panes.forEach(p=>p.hidden=true);subnav.hidden=true;results.hidden=false;results.replaceChildren();modal.querySelector('#ym-glass-page-title').textContent='Результаты поиска';
+      for(const e of entries.filter(x=>normalize(x.title+' '+x.detail).includes(q) && (!x.row.closest('[data-design-profile]') || [designProfile().mode,modal.dataset.mode].includes(x.row.closest('[data-design-profile]').dataset.designProfile)))){const b=document.createElement('button');b.className='ym-glass-result';const title=document.createElement('strong'),hint=document.createElement('span');title.textContent=e.title;hint.textContent=titles[e.pane.id];b.append(title,hint);b.onclick=()=>{select(e.pane.id,e.row.closest('[data-subsection]')?.dataset.subsection);for(let detail=e.row.closest('details');detail;detail=detail.parentElement.closest('details'))detail.open=true;e.row.scrollIntoView({block:'center'});e.row.classList.add('ym-glass-found');setTimeout(()=>e.row.classList.remove('ym-glass-found'),1500);e.row.querySelector('[role="radio"][aria-checked="true"],input:not(:disabled):not([aria-hidden="true"]),select:not([aria-hidden="true"]),button')?.focus({preventScroll:true});};results.append(b);}
+      if(!results.children.length)results.textContent='Ничего не найдено. Попробуй «шрифт», «обои» или «Discord».';
+    });
+    for(const {row,title} of entries){
+      row.querySelectorAll('input,select,textarea').forEach(el=>{if(!el.hasAttribute('aria-label'))el.setAttribute('aria-label',title);});
+      const toggle=row.querySelector('input[type="checkbox"]');if(toggle&&!toggle.disabled){row.classList.add('ym-toggle-row');row.addEventListener('click',e=>{if(e.target.closest('button,a,input,select,textarea,label'))return;toggle.click();});}
+    }
+    modal.querySelectorAll('.ym-color-swatch').forEach(b=>{b.setAttribute('aria-label',b.title||'Цвет акцента');const sync=()=>b.setAttribute('aria-pressed',String(b.classList.contains('active')));sync();new MutationObserver(sync).observe(b,{attributes:true,attributeFilter:['class']});});
+    backdrop.addEventListener('keydown',e=>{
+      if(!backdrop.classList.contains('open')||document.getElementById('ym-mod-update-dialog'))return;
+      if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();search.focus();return;}
+      if(e.key==='Escape'){e.stopPropagation();closeModSettings();return;}
+      if(e.key==='Tab'){const targets=[...modal.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea,a[href]')].filter(x=>x.getClientRects().length&&x.tabIndex>=0);const first=targets[0],last=targets[targets.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}
+    });
+    let frame=0;modal.addEventListener('pointermove',e=>{if(frame||modal.dataset.motion==='off')return;const b=e.target.closest('button,.ym-select');if(!b)return;frame=requestAnimationFrame(()=>{const r=b.getBoundingClientRect();b.style.setProperty('--ym-light-x',`${e.clientX-r.left}px`);b.style.setProperty('--ym-light-y',`${e.clientY-r.top}px`);frame=0;});});
+    select(rememberedPane);updateGlassSettings();
+    document.getElementById('btn-check-mod-update').onclick=async()=>{const api=window.yandexMusicMod?.updater;if(!api)return;try{const state=await api.check();renderModUpdate({...state,presentationAllowed:true});}catch(e){document.getElementById('ym-update-status').textContent='Не удалось проверить обновления';}};
+    document.getElementById('opt-mod-auto-updates').onchange=e=>window.yandexMusicMod?.updater?.automatic(e.target.checked).then(renderModUpdate);
+    initModUpdates();updateVersionLabels();
+  }
+
+  function updateGlassSettings() {
+    const modal = document.getElementById('ym-mod-modal'); if (!modal) return;
+    const profile = designProfile();
+    const menuMode = ['modern','classic','compact'].includes(modSettings['settings/appearance']) ? modSettings['settings/appearance'] : 'standard';
+    const blur = menuMode === 'modern' ? {off:0,light:14,medium:28,ultra:44}[modSettings['design/glassBlur'] || 'medium'] ?? 28 : 0;
+    modal.style.setProperty('--ym-glass-blur', `${blur}px`);
+    modal.style.setProperty('--ym-glass-opacity',String(profile.opacity));
+    modal.style.setProperty('--ym-classic-tone',profile.tone);
+    modal.style.setProperty('--ym-classic-radius',profile.radius+'px');
+    modal.dataset.edge=profile.edge?'on':'off';
+    modal.style.setProperty('--ym-glass-accent', modSettings['custom-themes/accent'] || '#8b5cf6');
+    const accent = (modSettings['custom-themes/accent'] || '#8b5cf6').toLowerCase();
+    const palette = modal.querySelector('#tab-appearance .ym-palette-wrap:not(#trackbar-palette)');
+    if (palette) {
+      let preset = false;
+      palette.querySelectorAll('.ym-color-swatch').forEach(button => {
+        const active = button.dataset.color.toLowerCase() === accent;
+        button.classList.toggle('active',active);preset ||= active;
+      });
+      const custom = palette.querySelector('input[type="color"]');
+      if(custom && /^#[a-f\d]{6}$/.test(accent)){custom.value = accent;custom.classList.toggle('ym-custom-selected',!preset);}
+    }
+    modal.dataset.blur = blur ? 'on' : 'off';
+    modal.dataset.motion = modSettings['design/smoothTransitions'] === false ? 'off' : 'on';
+    modal.dataset.mode = menuMode;
+    modal.dataset.menuFont = modSettings['settings/useAppFont'] === true ? 'app' : 'standard';
+    modal.dataset.largeText = String((parseFloat(modSettings['font-changer/modalSizeScale']) || 1) > 1.4);
+    modal.querySelectorAll('[data-design-profile]').forEach(section => section.hidden=![profile.mode,menuMode].includes(section.dataset.designProfile));
+
+  }
+
+
   function injectModUI() {
 
     if (document.getElementById("ym-mod-modal-backdrop")) return;
@@ -5397,239 +5737,45 @@ const BUILTIN_SYNCED_LYRICS = {
 
 
     backdrop.innerHTML = `
-
-      <div class="ym-mod-modal" id="ym-mod-modal">
-
-        <!-- Header -->
-
-        <div class="ym-modal-header">
-
-          <div class="ym-modal-title-wrap">
-
-            <div class="ym-modal-logo">
-
-              <img src="${MOD_LOGO_ICON_B64}" width="26" height="26" class="ym-header-logo-img" alt="Logo"/>
-
-            </div>
-
-            <div class="ym-modal-title">Настройки Мода</div>
-
-            <div class="ym-modal-version">v1.5.0 (YM 5.124.1)</div>
-
-          </div>
-
-          <button class="ym-modal-close" id="ym-mod-close-btn" title="Закрыть (Esc)">
-
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-
-            </svg>
-
-          </button>
-
-        </div>
-
-
-
-        <!-- Body -->
-
-        <div class="ym-modal-body">
-
-          <!-- Sidebar Tabs -->
-
-          <div class="ym-modal-tabs">
-
-            <button class="ym-tab-btn active" data-tab="tab-plus">
-
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-
-              </svg>
-
-              <span>Основные</span>
-
-            </button>
-
-            <button class="ym-tab-btn" data-tab="tab-appearance">
-
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-
-                <circle cx="13.5" cy="6.5" r=".5" fill="currentColor"></circle>
-
-                <circle cx="17.5" cy="10.5" r=".5" fill="currentColor"></circle>
-
-                <circle cx="8.5" cy="7.5" r=".5" fill="currentColor"></circle>
-
-                <circle cx="6.5" cy="12.5" r=".5" fill="currentColor"></circle>
-
-                <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.563-2.512 5.563-5.563C22 6.5 17.5 2 12 2z"></path>
-
-              </svg>
-
-              <span>Внешний вид</span>
-
-            </button>
-
-            <button class="ym-tab-btn" data-tab="tab-wallpapers">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-                <line x1="8" y1="21" x2="16" y2="21"></line>
-                <line x1="12" y1="17" x2="12" y2="21"></line>
-              </svg>
-              <span>Мастерская обоев</span>
-            </button>
-
-            <button class="ym-tab-btn" data-tab="tab-cleaner">
-
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-
-                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-
-                <line x1="1" y1="1" x2="23" y2="23"></line>
-
-              </svg>
-
-              <span>Очистка UI</span>
-
-            </button>
-
-            <button class="ym-tab-btn" data-tab="tab-fonts">
-
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-
-                <polyline points="4 7 4 4 20 4 20 7"></polyline>
-
-                <line x1="9" y1="20" x2="15" y2="20"></line>
-
-                <line x1="12" y1="4" x2="12" y2="20"></line>
-
-              </svg>
-
-              <span>Шрифты</span>
-
-            </button>
-
-            <button class="ym-tab-btn" data-tab="tab-overlay">
-
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-
-                <rect x="2" y="6" width="20" height="12" rx="2"></rect>
-
-                <line x1="6" y1="12" x2="10" y2="12"></line>
-
-                <line x1="8" y1="10" x2="8" y2="14"></line>
-
-                <circle cx="15" cy="13" r="1"></circle>
-
-                <circle cx="18" cy="11" r="1"></circle>
-
-              </svg>
-
-              <span>Игровой HUD</span>
-
-            </button>
-
-            <button class="ym-tab-btn" data-tab="tab-karaoke">
-
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-
-                <line x1="12" y1="19" x2="12" y2="23"></line>
-
-                <line x1="8" y1="23" x2="16" y2="23"></line>
-
-              </svg>
-
-              <span>Караоке</span>
-
-            </button>
-
-            <button class="ym-tab-btn" data-tab="tab-tweaks">
-
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-
-                <circle cx="12" cy="12" r="3"></circle>
-
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-
-              </svg>
-
-              <span>Discord и твики</span>
-
-            </button>
-
-            <button class="ym-tab-btn" data-tab="tab-about">
-
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-
-                <circle cx="12" cy="12" r="10"></circle>
-
-                <line x1="12" y1="16" x2="12" y2="12"></line>
-
-                <line x1="12" y1="8" x2="12.01" y2="8"></line>
-
-              </svg>
-
-              <span>О моде</span>
-
-            </button>
-
-          </div>
-
-
-
-          <!-- Content Panels -->
-
-          <div class="ym-modal-content">
-
-            <!-- TAB 0: PLUS UNLOCKER -->
-
-            <div class="ym-tab-pane active" id="tab-plus">
-
-              <div class="ym-card">
-
-                <div class="ym-card-title">Яндекс Плюс</div>
-
-                <div class="ym-row">
-
+      <div class="ym-mod-modal ym-glass-menu" id="ym-mod-modal" role="dialog" aria-modal="true" aria-labelledby="ym-glass-brand-title" tabindex="-1">
+        <header class="ym-glass-header">
+          <div class="ym-glass-brand"><div class="ym-modal-logo"><img src="${MOD_LOGO_ICON_B64}" width="36" height="36" alt="" /></div><div><div id="ym-glass-brand-title">Музыка Mod</div><span class="ym-glass-version">Музыка Mod</span></div></div>
+          <label class="ym-glass-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg><input id="ym-settings-search" type="search" placeholder="Найти настройку" aria-label="Найти настройку"/><kbd>Ctrl K</kbd></label>
+          <button type="button" class="ym-modal-close" id="ym-mod-close-btn" aria-label="Закрыть настройки" title="Закрыть (Esc)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M6 18 18 6"/></svg></button>
+        </header>
+        <div class="ym-glass-workspace" id="ym-glass-workspace">
+<nav class="ym-modal-tabs ym-hub" aria-label="Разделы настроек">
+  <div class="ym-hub-intro"><h1>Сделай по-своему</h1><p>Оформление, плеер и инструменты для твоей музыки</p></div>
+  <div class="ym-hub-features"><button type="button" class="ym-tab-btn ym-hub-feature" data-tab="tab-appearance" style="--ym-hub-tint:#b2a4f5"><span class="ym-hub-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3C1 3 1 20 11 21c6 0 0-6 5-6 9 0 7-12-4-12Z"/></svg></span><span class="ym-hub-copy"><span class="ym-hub-label">Оформление</span><span class="ym-hub-detail">Цвета, стекло и вид плеера</span></span><svg class="ym-hub-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ym-tab-btn ym-hub-feature" data-tab="tab-wallpapers" style="--ym-hub-tint:#a9d7c9"><span class="ym-hub-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h18v18H3zM3 16l5-5 4 4 3-3 6 6"/></svg></span><span class="ym-hub-copy"><span class="ym-hub-label">Обои</span><span class="ym-hub-detail">Твоя атмосфера в приложении</span></span><svg class="ym-hub-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div><div class="ym-hub-groups"><section class="ym-hub-group"><h2>Интерфейс</h2><div class="ym-hub-list"><button type="button" class="ym-tab-btn" data-tab="tab-fonts" style="--ym-hub-tint:#b2a4f5"><span class="ym-hub-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V4h16v3M12 4v16M8 20h8"/></svg></span><span class="ym-hub-copy"><span class="ym-hub-label">Шрифты</span></span><svg class="ym-hub-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ym-tab-btn" data-tab="tab-cleaner" style="--ym-hub-tint:#a9d7c9"><span class="ym-hub-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M2 12c5-8 15-8 20 0-2 3-4 5-7 5"/></svg></span><span class="ym-hub-copy"><span class="ym-hub-label">Очистка интерфейса</span></span><svg class="ym-hub-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ym-tab-btn" data-tab="tab-plus" style="--ym-hub-tint:#a7c9e8"><span class="ym-hub-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M8 4v6m8 4v6"/></svg></span><span class="ym-hub-copy"><span class="ym-hub-label">Основные</span></span><svg class="ym-hub-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div></section><section class="ym-hub-group"><h2>Инструменты</h2><div class="ym-hub-list"><button type="button" class="ym-tab-btn" data-tab="tab-overlay" style="--ym-hub-tint:#a7c9e8"><span class="ym-hub-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5h18v13H3zM8 21h8M12 18v3"/></svg></span><span class="ym-hub-copy"><span class="ym-hub-label">Игровой HUD</span></span><svg class="ym-hub-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ym-tab-btn" data-tab="tab-karaoke" style="--ym-hub-tint:#eab1bd"><span class="ym-hub-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5a3 3 0 0 1 6 0v6a3 3 0 0 1-6 0zM6 10v2a6 6 0 0 0 12 0v-2M12 18v4"/></svg></span><span class="ym-hub-copy"><span class="ym-hub-label">Караоке</span></span><svg class="ym-hub-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button><button type="button" class="ym-tab-btn" data-tab="tab-tweaks" style="--ym-hub-tint:#b2a4f5"><span class="ym-hub-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14l3 13-6 2-2-3h-4l-2 3-6-2zM8 11h1m6 0h1"/></svg></span><span class="ym-hub-copy"><span class="ym-hub-label">Discord</span></span><svg class="ym-hub-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div></section></div><div class="ym-hub-list ym-hub-about"><button type="button" class="ym-tab-btn" data-tab="tab-about" style="--ym-hub-tint:#a7a7b2"><span class="ym-hub-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 11v6M12 7v1M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0"/></svg></span><span class="ym-hub-copy"><span class="ym-hub-label">О моде</span><span class="ym-hub-detail">Версия и обновления</span></span><svg class="ym-hub-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div></nav>
+          <section class="ym-glass-settings"><div class="ym-glass-page-heading"><button type="button" id="ym-settings-home" class="ym-home-back" aria-label="Назад к разделам" title="Все разделы"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 5-7 7 7 7"/></svg></button><div><span class="ym-page-parent">Настройки мода</span><h1 id="ym-glass-page-title" tabindex="-1">Основные</h1></div></div>
+            <nav class="ym-settings-subnav" role="tablist" aria-label="Подразделы настроек" hidden></nav><div class="ym-modal-content"><div class="ym-glass-results" role="region" aria-labelledby="ym-glass-page-title" hidden></div><div class="ym-tab-pane" id="tab-plus">
+
+              <div class="ym-card ym-capabilities-card"><div class="ym-card-title">Встроенные возможности</div><div class="ym-capabilities"><span class="ym-capability" data-capability="built-in" id="opt-plus-enabled"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg><span>Полные треки</span></span><span class="ym-capability" data-capability="built-in" id="opt-plus-skips"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg><span>Безлимитные пропуски</span></span><span class="ym-capability" data-capability="built-in" id="opt-plus-ads"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg><span>Без рекламы</span></span></div></div>
+
+            <div class="ym-card"><div class="ym-card-title">Приложение</div><div class="ym-row">
                   <div class="ym-col-info">
-
-                    <span class="ym-label">Статус подписки</span>
-
-                    <span class="ym-desc" style="color:#10b981;font-weight:600;">Активен (hasPlus: true)</span>
-
+                    <span class="ym-label">Скрывать уведомления об обновлениях</span>
+                    <span class="ym-desc">Баннеры штатного обновления Яндекс Музыки</span>
                   </div>
-
-                  <button class="ym-btn-action ym-btn-primary" id="btn-reload-plus">
-
-                    Перезагрузить приложение
-
-                  </button>
-
+                  <label class="ym-switch">
+                    <input type="checkbox" id="opt-block-app-updates" checked>
+                    <span class="ym-slider"></span>
+                  </label>
                 </div>
 
-
-
                 <div class="ym-row">
 
                   <div class="ym-col-info">
 
-                    <span class="ym-label">Снятие 30-секундного лимита</span>
+                    <span class="ym-label">Лучшее качество звука</span>
 
-                    <span class="ym-desc">Воспроизведение полных аудиотреков в высоком битрейте</span>
+                    <span class="ym-desc">Автоматически выбирать доступный битрейт</span>
 
                   </div>
 
                   <label class="ym-switch">
 
-                    <input type="checkbox" id="opt-plus-enabled" checked disabled>
+                    <input type="checkbox" id="opt-auto-quality">
 
                     <span class="ym-slider"></span>
 
@@ -5643,75 +5789,23 @@ const BUILTIN_SYNCED_LYRICS = {
 
                   <div class="ym-col-info">
 
-                    <span class="ym-label">Неограниченные пропуски</span>
+                    <span class="ym-label">Масштаб интерфейса</span>
 
-                    <span class="ym-desc">Снятие ограничений на пропуск треков в Моей Волне</span>
-
-                  </div>
-
-                  <label class="ym-switch">
-
-                    <input type="checkbox" id="opt-plus-skips" checked disabled>
-
-                    <span class="ym-slider"></span>
-
-                  </label>
-
-                </div>
-
-
-
-                <div class="ym-row">
-
-                  <div class="ym-col-info">
-
-                    <span class="ym-label">Блокировка рекламы</span>
-
-                    <span class="ym-desc">Подавление баннеров подписки и рекламных аудиовставок</span>
+                    <span class="ym-desc">Размер элементов приложения</span>
 
                   </div>
 
-                  <label class="ym-switch">
+                  <select class="ym-select" id="opt-ui-scale">
 
-                    <input type="checkbox" id="opt-plus-ads" checked disabled>
+                    <option value="0.8">80%</option>
 
-                    <span class="ym-slider"></span>
+                    <option value="0.9">90%</option>
 
-                  </label>
+                    <option value="1.0">100% (По умолчанию)</option>
 
-                </div>
+                    <option value="1.1">110%</option>
 
-              </div>
-
-            </div>
-
-
-
-            <!-- TAB 1: APPEARANCE -->
-
-            <div class="ym-tab-pane" id="tab-appearance">
-
-              <div class="ym-card">
-
-                <div class="ym-card-title">Стиль и акцентные цвета</div>
-
-                <div class="ym-row">
-
-                  <div class="ym-col-info">
-
-                    <span class="ym-label">Режим оформления</span>
-
-                    <span class="ym-desc">Переключение визуальной структуры плеера</span>
-
-                  </div>
-
-                  <select class="ym-select" id="opt-design-mode">
-
-                    <option value="modern">Modern Glass (Матовое стекло)</option>
-
-                    <option value="classic">Классический темный</option>
-
-                    <option value="compact">Компактный (Минимализм)</option>
+                    <option value="1.25">125%</option>
 
                   </select>
 
@@ -5719,33 +5813,80 @@ const BUILTIN_SYNCED_LYRICS = {
 
 
 
+                <details class="ym-advanced"><summary>Дополнительно<span>Перезагрузка и диагностика</span></summary><div class="ym-row">
+
+                  <div class="ym-col-info">
+
+                    <span class="ym-label">Консоль отладки</span>
+
+                    <span class="ym-desc">Для диагностики ошибок</span>
+
+                  </div>
+
+                  <button class="ym-btn-action ym-btn-secondary" id="btn-open-devtools">
+
+                    Открыть
+
+                  </button>
+
+                </div><div class="ym-row"><div class="ym-col-info"><span class="ym-label">Обновить интерфейс</span><span class="ym-desc">Если изменения применились не полностью</span></div><button type="button" class="ym-btn-action ym-btn-secondary" id="btn-reload-plus">Перезагрузить</button></div></details>
+
+              </div></div>
+<div class="ym-tab-pane" id="tab-appearance"><section class="ym-settings-section" id="ym-sub-appearance-design" data-subsection="appearance-design" data-title="Дизайн"><div class="ym-card"><div class="ym-card-title">Меню мода</div><div class="ym-row"><div class="ym-col-info"><span class="ym-label">Вид меню</span><span class="ym-desc">Отдельно от оформления приложения</span></div><select class="ym-select" id="opt-menu-appearance" data-setting="settings/appearance"><option value="standard">Стандартный</option><option value="modern">Стекло</option><option value="classic">Классика</option><option value="compact">Компактный</option></select></div><div class="ym-row"><div class="ym-col-info"><span class="ym-label">Шрифт приложения в меню</span><span class="ym-desc">По умолчанию — читаемый системный шрифт</span></div><label class="ym-switch"><input type="checkbox" id="opt-menu-app-font" data-setting="settings/useAppFont"/><span class="ym-slider"></span></label></div></div><div class="ym-card">
+
+                
+
+                <div class="ym-row ym-choice-row">
+
+                  <div class="ym-col-info">
+
+                    <span class="ym-label">Дизайн приложения</span>
+
+                    
+
+                  </div>
+
+                  <div class="ym-choice-control" data-choice-select="opt-design-mode" role="radiogroup" aria-label="Дизайн приложения"><select class="ym-select ym-choice-native" tabindex="-1" aria-hidden="true" id="opt-design-mode">
+
+                    <option value="modern">Матовое стекло</option>
+
+                    <option value="classic">Классический</option>
+
+                    <option value="compact">Компактный</option>
+
+                  </select><div class="ym-choice-options"><span class="ym-choice-indicator" aria-hidden="true"></span><button type="button" role="radio" aria-checked="false" data-value="modern">Стекло</button><button type="button" role="radio" aria-checked="false" data-value="classic">Классика</button><button type="button" role="radio" aria-checked="false" data-value="compact">Компактный</button></div></div>
+
+                </div>
+
+
+
                 <div class="ym-row">
 
                   <div class="ym-col-info">
 
-                    <span class="ym-label">Акцентный цвет</span>
+                    <span class="ym-label">Цвет акцента</span>
 
-                    <span class="ym-desc">Цвет выделения, кнопок, свечения и ползунков</span>
+                    <span class="ym-desc">Выбранные элементы и подсветка</span>
 
                   </div>
 
                   <div class="ym-palette-wrap">
 
-                    <div class="ym-color-swatch" data-color="#8b5cf6" style="background:#8b5cf6;" title="Киберпанк Фиолетовый"></div>
+                    <button type="button" class="ym-color-swatch" data-color="#8b5cf6" style="background:#8b5cf6;" title="Киберпанк Фиолетовый"></button>
 
-                    <div class="ym-color-swatch" data-color="#007acc" style="background:#007acc;" title="Неоновый Синий"></div>
+                    <button type="button" class="ym-color-swatch" data-color="#007acc" style="background:#007acc;" title="Неоновый Синий"></button>
 
-                    <div class="ym-color-swatch" data-color="#fed42b" style="background:#fed42b;" title="Яндекс Жёлтый"></div>
+                    <button type="button" class="ym-color-swatch" data-color="#fed42b" style="background:#fed42b;" title="Яндекс Жёлтый"></button>
 
-                    <div class="ym-color-swatch" data-color="#10b981" style="background:#10b981;" title="Изумрудный Неон"></div>
+                    <button type="button" class="ym-color-swatch" data-color="#10b981" style="background:#10b981;" title="Изумрудный Неон"></button>
 
-                    <div class="ym-color-swatch" data-color="#ff7b00" style="background:#ff7b00;" title="Закатный Оранжевый"></div>
+                    <button type="button" class="ym-color-swatch" data-color="#ff7b00" style="background:#ff7b00;" title="Закатный Оранжевый"></button>
 
-                    <div class="ym-color-swatch" data-color="#ff3347" style="background:#ff3347;" title="Рубиновый Красный"></div>
+                    <button type="button" class="ym-color-swatch" data-color="#ff3347" style="background:#ff3347;" title="Рубиновый Красный"></button>
 
-                    <div class="ym-color-swatch" data-color="#f43f5e" style="background:#f43f5e;" title="Неоновый Розовый"></div>
+                    <button type="button" class="ym-color-swatch" data-color="#f43f5e" style="background:#f43f5e;" title="Неоновый Розовый"></button>
 
-                    <div class="ym-color-swatch" data-color="#e2e8f0" style="background:#e2e8f0;" title="Серебряный Монохром"></div>
+                    <button type="button" class="ym-color-swatch" data-color="#e2e8f0" style="background:#e2e8f0;" title="Серебряный Монохром"></button>
 
                     <input type="color" class="ym-color-picker" id="opt-custom-color" value="#8b5cf6" title="Свой цвет">
 
@@ -5755,19 +5896,21 @@ const BUILTIN_SYNCED_LYRICS = {
 
 
 
-                <div class="ym-row">
+                
+
+              </div></section><section class="ym-settings-section" id="ym-sub-appearance-profile" data-subsection="appearance-profile" data-title="Параметры"><div class="ym-card" data-design-profile="modern"><div class="ym-card-title">Параметры стекла</div><div class="ym-row"><div class="ym-col-info"><span class="ym-label">Прозрачность</span><span class="ym-desc">Ниже — плотнее фон панелей</span></div><div class="ym-range-wrap"><input class="ym-range" type="range" id="opt-glass-transparency" data-setting="design/modern/transparency" min="0" max="65" value="18" data-unit="%"/><output class="ym-range-val" for="opt-glass-transparency">18%</output></div></div><div class="ym-row ym-choice-row">
 
                   <div class="ym-col-info">
 
-                    <span class="ym-label">Размытие стекла (Glassmorphism)</span>
+                    <span class="ym-label">Размытие меню</span>
 
-                    <span class="ym-desc">Интенсивность матового эффекта фона</span>
+                    
 
                   </div>
 
-                  <select class="ym-select" id="opt-glass-blur">
+                  <div class="ym-choice-control" data-choice-select="opt-glass-blur" role="radiogroup" aria-label="Размытие меню"><select class="ym-select ym-choice-native" tabindex="-1" aria-hidden="true" id="opt-glass-blur">
 
-                    <option value="medium">Премиум стекло (28px)</option>
+                    <option value="medium">Матовоe стекло (28px)</option>
 
                     <option value="light">Мягкое стекло (14px)</option>
 
@@ -5775,25 +5918,13 @@ const BUILTIN_SYNCED_LYRICS = {
 
                     <option value="off">Без размытия (Выкл)</option>
 
-                  </select>
+                  </select><div class="ym-choice-options"><span class="ym-choice-indicator" aria-hidden="true"></span><button type="button" role="radio" aria-checked="false" data-value="off">Нет</button><button type="button" role="radio" aria-checked="false" data-value="light">Лёгкое</button><button type="button" role="radio" aria-checked="false" data-value="medium">Среднее</button><button type="button" role="radio" aria-checked="false" data-value="ultra">Сильное</button></div></div>
 
-                </div>
-
-              </div>
-
-
-
-              <div class="ym-card">
-
-                <div class="ym-card-title">Эффекты и плавные анимации</div>
-
-
-
-                <div class="ym-row">
+                </div><div class="ym-row"><div class="ym-col-info"><span class="ym-label">Световой контур</span><span class="ym-desc">Тонкий светлый край стеклянных панелей</span></div><label class="ym-switch"><input type="checkbox" id="opt-glass-edge" checked data-setting="design/modern/edge"/><span class="ym-slider"></span></label></div><div class="ym-row">
 
                   <div class="ym-col-info">
 
-                    <span class="ym-label">Плавные анимации карточек (Hover FX)</span>
+                    <span class="ym-label">Анимация карточек</span>
 
                     <span class="ym-desc">Мягкий подъем и неоновое свечение треков и альбомов при наведении</span>
 
@@ -5807,15 +5938,11 @@ const BUILTIN_SYNCED_LYRICS = {
 
                   </label>
 
-                </div>
-
-
-
-                <div class="ym-row">
+                </div><div class="ym-row">
 
                   <div class="ym-col-info">
 
-                    <span class="ym-label">Неоновая подсветка плеера (Ambient Glow)</span>
+                    <span class="ym-label">Подсветка плеера</span>
 
                     <span class="ym-desc">Мягкое свечение нижней панели плеера под цвет акцента</span>
 
@@ -5829,11 +5956,7 @@ const BUILTIN_SYNCED_LYRICS = {
 
                   </label>
 
-                </div>
-
-
-
-                <div class="ym-row">
+                </div><div class="ym-row">
 
                   <div class="ym-col-info">
 
@@ -5851,7 +5974,21 @@ const BUILTIN_SYNCED_LYRICS = {
 
                   </label>
 
-                </div>
+                </div></div><div class="ym-card" data-design-profile="classic"><div class="ym-card-title">Параметры классики</div><div class="ym-row"><div class="ym-col-info"><span class="ym-label">Цвет панелей</span><span class="ym-desc">Непрозрачный фон без размытия</span></div><select class="ym-select" id="opt-classic-tone" data-setting="design/classic/tone"><option value="dark">Тёмный</option><option value="coal">Графитовый</option></select></div><div class="ym-row"><div class="ym-col-info"><span class="ym-label">Скругление</span><span class="ym-desc">Углы меню и панели плеера</span></div><div class="ym-range-wrap"><input class="ym-range" type="range" id="opt-classic-radius" data-setting="design/classic/radius" min="0" max="16" value="8" data-unit=" px"/><output class="ym-range-val" for="opt-classic-radius">8 px</output></div></div></div><div class="ym-card" data-design-profile="compact"><div class="ym-card-title">Параметры компактного оформления</div><div class="ym-row"><div class="ym-col-info"><span class="ym-label">Высота плеера</span><span class="ym-desc">Панель занимает меньше места</span></div><select class="ym-select" id="opt-compact-height" data-number data-setting="design/compact/playerHeight"><option value="64">64 px</option><option value="72">72 px</option><option value="80">80 px</option></select></div><div class="ym-row"><div class="ym-col-info"><span class="ym-label">Строки коллекции</span><span class="ym-desc">Расстояние между композициями</span></div><select class="ym-select" id="opt-compact-density" data-setting="design/compact/rowDensity"><option value="tight">Плотные</option><option value="normal">Обычные</option></select></div></div></section><section class="ym-settings-section" id="ym-sub-appearance-motion" data-subsection="appearance-motion" data-title="Анимации"><div class="ym-card">
+
+                <div class="ym-card-title">Движение и подсветка</div>
+
+
+
+                
+
+
+
+                
+
+
+
+                
 
 
 
@@ -5897,11 +6034,8 @@ const BUILTIN_SYNCED_LYRICS = {
 
                 </div>
 
-              </div>
-
-              <!-- Custom TikTok Neon Player Trackbar -->
-              <div class="ym-card">
-                <div class="ym-card-title">Кастомный трекбар плеера (Стиль TikTok)</div>
+              </div></section><section class="ym-settings-section" id="ym-sub-appearance-player" data-subsection="appearance-player" data-title="Плеер"><div class="ym-card">
+                
                 <div class="ym-row">
                   <div class="ym-col-info">
                     <span class="ym-label">Неоновая полоска сверху плеера</span>
@@ -5918,12 +6052,12 @@ const BUILTIN_SYNCED_LYRICS = {
                     <span class="ym-desc">Цвет линии и светящейся точки трека</span>
                   </div>
                   <div class="ym-palette-wrap" id="trackbar-palette">
-                    <div class="ym-color-swatch active" data-color="#ffe600" style="background:#ffe600;" title="Ярко-желтый (TikTok)"></div>
-                    <div class="ym-color-swatch" data-color="#ff2d55" style="background:#ff2d55;" title="Киберпанк Розовый"></div>
-                    <div class="ym-color-swatch" data-color="#00f0ff" style="background:#00f0ff;" title="Неоновый Бирюзовый"></div>
-                    <div class="ym-color-swatch" data-color="#00ff66" style="background:#00ff66;" title="Токсично-зеленый"></div>
-                    <div class="ym-color-swatch" data-color="#a855f7" style="background:#a855f7;" title="Электрический Фиолетовый"></div>
-                    <div class="ym-color-swatch" data-color="#ffffff" style="background:#ffffff;" title="Минималистичный Белый"></div>
+                    <button type="button" class="ym-color-swatch active" data-color="#ffe600" style="background:#ffe600;" title="Ярко-желтый (TikTok)"></button>
+                    <button type="button" class="ym-color-swatch" data-color="#ff2d55" style="background:#ff2d55;" title="Киберпанк Розовый"></button>
+                    <button type="button" class="ym-color-swatch" data-color="#00f0ff" style="background:#00f0ff;" title="Неоновый Бирюзовый"></button>
+                    <button type="button" class="ym-color-swatch" data-color="#00ff66" style="background:#00ff66;" title="Токсично-зеленый"></button>
+                    <button type="button" class="ym-color-swatch" data-color="#a855f7" style="background:#a855f7;" title="Электрический Фиолетовый"></button>
+                    <button type="button" class="ym-color-swatch" data-color="#ffffff" style="background:#ffffff;" title="Минималистичный Белый"></button>
                     <input type="color" class="ym-color-picker" id="opt-trackbar-custom-color" value="#ffe600" title="Свой цвет">
                   </div>
                 </div>
@@ -5948,38 +6082,35 @@ const BUILTIN_SYNCED_LYRICS = {
                     <span class="ym-slider"></span>
                   </label>
                 </div>
-              </div>
-
-            </div>
-
-            <!-- TAB 1.5: WALLPAPER WORKSHOP -->
-            <div class="ym-tab-pane" id="tab-wallpapers">
-              <!-- VSThemes In-App Catalog Banner (Compact & Non-overflowing) -->
-              <div class="ym-vsthemes-banner">
-                <div class="ym-vsthemes-header">
-                  <div class="ym-vsthemes-title">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                    <span>Каталог анимированных обоев VSThemes.org</span>
-                    <span class="ym-badge" style="background:rgba(139,92,246,0.3);color:#e9d5ff;border-color:rgba(139,92,246,0.5);">Скачивание в 1 клик</span>
-                  </div>
-                  <div class="ym-vsthemes-desc">
-                    Открывает галерею живых обоев прямо в приложении. Нажмите «Скачать» на любых обоях — мод автоматически загрузит, распакует и установит их на фон!
-                  </div>
-                </div>
-                <div class="ym-vsthemes-actions">
-                  <button class="ym-btn-vsthemes" id="btn-open-vsthemes" type="button">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                    <span>Открыть каталог VSThemes</span>
-                  </button>
-                  <button class="ym-btn-upload" id="btn-upload-local-wp" type="button" title="Выбрать видео или GIF файл с компьютера">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                    <span>С диска (MP4 / GIF)</span>
+              </div></section></div>
+<div class="ym-tab-pane" id="tab-wallpapers"><section class="ym-settings-section" id="ym-sub-wallpapers-library" data-subsection="wallpapers-library" data-title="Мои обои"><div class="ym-card"><div class="ym-row"><div class="ym-col-info"><span class="ym-label">Добавить свои обои</span><span class="ym-desc">Видео или GIF с компьютера</span></div><button type="button" class="ym-btn-action" id="btn-upload-local-wp">Выбрать файл</button></div></div><div class="ym-card">
+                <div class="ym-card-header-row">
+                  <div class="ym-card-title">Библиотека обоев</div>
+                  <button class="ym-btn-action" id="btn-refresh-wallpapers" title="Обновить список обоев">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    <span>Обновить</span>
                   </button>
                 </div>
-              </div>
 
-              <div class="ym-card">
-                <div class="ym-card-title">Управление живыми обоями</div>
+                <div class="ym-wallpaper-grid" id="ym-wallpaper-grid"></div>
+              </div><div class="ym-card">
+                <div class="ym-card-title">Свои обои</div>
+                <div class="ym-row ym-row-block">
+                  <span class="ym-desc" style="margin-bottom: 8px;">Вставьте прямую ссылку на видео (.mp4 / .webm) или анимированный GIF / изображение:</span>
+                  <div class="ym-input-group">
+                    <input type="text" class="ym-input" id="opt-wallpaper-custom-url" placeholder="https://example.com/video.mp4 или gif...">
+                    <button class="ym-btn-action ym-btn-primary" id="btn-apply-custom-wallpaper">Применить</button>
+                  </div>
+                </div>
+                <div class="ym-row">
+                  <div class="ym-col-info">
+                    <span class="ym-label">Сбросить фон на стандартный</span>
+                    <span class="ym-desc">Возвращает исходный темный фон Яндекс Музыки</span>
+                  </div>
+                  <button class="ym-btn-action ym-btn-secondary" id="btn-reset-wallpaper">Сбросить</button>
+                </div>
+              </div></section><section class="ym-settings-section" id="ym-sub-wallpapers-catalog" data-subsection="wallpapers-catalog" data-title="Каталог"><div class="ym-card ym-wallpaper-catalog"><div class="ym-row"><div class="ym-col-info"><span class="ym-label">Каталог VSThemes</span><span class="ym-desc">Живые обои. Открывается внутри приложения.</span></div><button type="button" class="ym-btn-action" id="btn-open-vsthemes">Открыть каталог</button></div><p class="ym-catalog-note">Выберите обои в каталоге и нажмите «Скачать». Мод загрузит и подготовит фон.</p></div></section><section class="ym-settings-section" id="ym-sub-wallpapers-settings" data-subsection="wallpapers-settings" data-title="Настройки"><div class="ym-card">
+                <div class="ym-card-title">Фон приложения</div>
                 <div class="ym-row">
                   <div class="ym-col-info">
                     <span class="ym-label">Включить анимированные обои</span>
@@ -5992,8 +6123,8 @@ const BUILTIN_SYNCED_LYRICS = {
                 </div>
                 <div class="ym-row">
                   <div class="ym-col-info">
-                    <span class="ym-label">Затемнение фона (Dimming)</span>
-                    <span class="ym-desc">Регулирует яркость для идеальной читаемости названий треков</span>
+                    <span class="ym-label">Затемнение фона</span>
+                    <span class="ym-desc">Для читаемости названий треков</span>
                   </div>
                   <div class="ym-range-wrap">
                     <input type="range" class="ym-range" id="opt-wallpaper-opacity" min="10" max="90" value="55">
@@ -6002,8 +6133,8 @@ const BUILTIN_SYNCED_LYRICS = {
                 </div>
                 <div class="ym-row">
                   <div class="ym-col-info">
-                    <span class="ym-label">Размытие фона (Backdrop Blur)</span>
-                    <span class="ym-desc">Мягкое размытие движения для концентрации на музыке</span>
+                    <span class="ym-label">Размытие фона</span>
+                    <span class="ym-desc">Смягчает детали изображения</span>
                   </div>
                   <div class="ym-range-wrap">
                     <input type="range" class="ym-range" id="opt-wallpaper-blur" min="0" max="24" value="0">
@@ -6012,54 +6143,18 @@ const BUILTIN_SYNCED_LYRICS = {
                 </div>
                 <div class="ym-row">
                   <div class="ym-col-info">
-                    <span class="ym-label">Энергосбережение (Пауза при сворачивании)</span>
-                    <span class="ym-desc">Останавливать анимацию и видео, когда окно скрыто, для экономии GPU и батареи</span>
+                    <span class="ym-label">Пауза при сворачивании</span>
+                    <span class="ym-desc">Останавливать видео, пока окно скрыто</span>
                   </div>
                   <label class="ym-switch">
                     <input type="checkbox" id="opt-wallpaper-pause" checked>
                     <span class="ym-slider"></span>
                   </label>
                 </div>
-              </div>
+              </div></section></div>
+<div class="ym-tab-pane" id="tab-cleaner"><section class="ym-settings-section" id="ym-sub-cleaner-sections" data-subsection="cleaner-sections" data-title="Разделы"><div class="ym-card">
 
-              <div class="ym-card">
-                <div class="ym-card-header-row">
-                  <div class="ym-card-title">Ваши живые обои</div>
-                  <button class="ym-btn-action" id="btn-refresh-wallpapers" title="Обновить список обоев">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                    <span>Обновить</span>
-                  </button>
-                </div>
-
-                <div class="ym-wallpaper-grid" id="ym-wallpaper-grid"></div>
-              </div>
-
-              <div class="ym-card">
-                <div class="ym-card-title">Свои обои (URL / Файл)</div>
-                <div class="ym-row ym-row-block">
-                  <span class="ym-desc" style="margin-bottom: 8px;">Вставьте прямую ссылку на видео (.mp4 / .webm) или анимированный GIF / изображение:</span>
-                  <div class="ym-input-group">
-                    <input type="text" class="ym-input" id="opt-wallpaper-custom-url" placeholder="https://example.com/video.mp4 или gif...">
-                    <button class="ym-btn-primary" id="btn-apply-custom-wallpaper">Применить</button>
-                  </div>
-                </div>
-                <div class="ym-row">
-                  <div class="ym-col-info">
-                    <span class="ym-label">Сбросить фон на стандартный</span>
-                    <span class="ym-desc">Возвращает исходный темный фон Яндекс Музыки</span>
-                  </div>
-                  <button class="ym-btn-secondary" id="btn-reset-wallpaper">Сбросить</button>
-                </div>
-              </div>
-            </div>
-
-            <!-- TAB 2: CLEANER -->
-
-            <div class="ym-tab-pane" id="tab-cleaner">
-
-              <div class="ym-card">
-
-                <div class="ym-card-title">Боковое меню навигации</div>
+                <div class="ym-card-title">Скрывать в боковом меню</div>
 
                 
 
@@ -6068,8 +6163,6 @@ const BUILTIN_SYNCED_LYRICS = {
                   <div class="ym-col-info">
 
                     <span class="ym-label">Скрыть раздел «Концерты»</span>
-
-                    <span class="ym-desc">Убирает пункт афиши концертов из панели навигации</span>
 
                   </div>
 
@@ -6091,8 +6184,6 @@ const BUILTIN_SYNCED_LYRICS = {
 
                     <span class="ym-label">Скрыть раздел «Детям»</span>
 
-                    <span class="ym-desc">Убирает детский раздел из левой панели</span>
-
                   </div>
 
                   <label class="ym-switch">
@@ -6112,8 +6203,6 @@ const BUILTIN_SYNCED_LYRICS = {
                   <div class="ym-col-info">
 
                     <span class="ym-label">Скрыть раздел «Подкасты и книги»</span>
-
-                    <span class="ym-desc">Убирает подкасты, аудиокниги и лекции</span>
 
                   </div>
 
@@ -6135,8 +6224,6 @@ const BUILTIN_SYNCED_LYRICS = {
 
                     <span class="ym-label">Скрыть раздел «Тренды и рекомендации»</span>
 
-                    <span class="ym-desc">Убирает блок трендов и промо-чартов</span>
-
                   </div>
 
                   <label class="ym-switch">
@@ -6157,8 +6244,6 @@ const BUILTIN_SYNCED_LYRICS = {
 
                     <span class="ym-label">Скрыть раздел «Радио»</span>
 
-                    <span class="ym-desc">Убирает радиостанции из бокового меню</span>
-
                   </div>
 
                   <label class="ym-switch">
@@ -6171,13 +6256,9 @@ const BUILTIN_SYNCED_LYRICS = {
 
                 </div>
 
-              </div>
+              </div></section><section class="ym-settings-section" id="ym-sub-cleaner-promos" data-subsection="cleaner-promos" data-title="Промо"><div class="ym-card">
 
-
-
-              <div class="ym-card">
-
-                <div class="ym-card-title">Реклама, баннеры и промо-блоки</div>
+                <div class="ym-card-title">Убирать из приложения</div>
 
 
 
@@ -6186,8 +6267,6 @@ const BUILTIN_SYNCED_LYRICS = {
                   <div class="ym-col-info">
 
                     <span class="ym-label">Скрыть рекламные баннеры и Плюс</span>
-
-                    <span class="ym-desc">Убирает все промо-баннеры и предложения оформить подписку</span>
 
                   </div>
 
@@ -6209,8 +6288,6 @@ const BUILTIN_SYNCED_LYRICS = {
 
                     <span class="ym-label">Скрыть блок «Установить на телефон»</span>
 
-                    <span class="ym-desc">Убирает QR-коды и баннеры мобильного приложения</span>
-
                   </div>
 
                   <label class="ym-switch">
@@ -6230,8 +6307,6 @@ const BUILTIN_SYNCED_LYRICS = {
                   <div class="ym-col-info">
 
                     <span class="ym-label">Скрыть «Донаты артисту» (чаевые)</span>
-
-                    <span class="ym-desc">Убирает кнопки донатов на страницах исполнителей</span>
 
                   </div>
 
@@ -6253,8 +6328,6 @@ const BUILTIN_SYNCED_LYRICS = {
 
                     <span class="ym-label">Скрыть «Купить билет на концерт»</span>
 
-                    <span class="ym-desc">Убирает афиши и виджеты покупки билетов у артистов</span>
-
                   </div>
 
                   <label class="ym-switch">
@@ -6275,8 +6348,6 @@ const BUILTIN_SYNCED_LYRICS = {
 
                     <span class="ym-label">Скрыть видеоклипы и трейлеры</span>
 
-                    <span class="ym-desc">Убирает блоки видеороликов на страницах треков</span>
-
                   </div>
 
                   <label class="ym-switch">
@@ -6289,13 +6360,9 @@ const BUILTIN_SYNCED_LYRICS = {
 
                 </div>
 
-              </div>
+              </div></section><section class="ym-settings-section" id="ym-sub-cleaner-player" data-subsection="cleaner-player" data-title="Плеер"><div class="ym-card">
 
-
-
-              <div class="ym-card">
-
-                <div class="ym-card-title">Элементы плеера (Нижняя панель)</div>
+                <div class="ym-card-title">Скрывать в плеере</div>
 
 
 
@@ -6304,8 +6371,6 @@ const BUILTIN_SYNCED_LYRICS = {
                   <div class="ym-col-info">
 
                     <span class="ym-label">Скрыть кнопку «Дизлайк» (Не нравится)</span>
-
-                    <span class="ym-desc">Убирает кнопку дизлайка из панели воспроизведения</span>
 
                   </div>
 
@@ -6327,8 +6392,6 @@ const BUILTIN_SYNCED_LYRICS = {
 
                     <span class="ym-label">Скрыть кнопку «Очередь воспроизведения»</span>
 
-                    <span class="ym-desc">Убирает список следующих треков из нижнего бара</span>
-
                   </div>
 
                   <label class="ym-switch">
@@ -6348,8 +6411,6 @@ const BUILTIN_SYNCED_LYRICS = {
                   <div class="ym-col-info">
 
                     <span class="ym-label">Скрыть кнопку «Полноэкранный режим»</span>
-
-                    <span class="ym-desc">Убирает иконку перехода на полный экран</span>
 
                   </div>
 
@@ -6371,8 +6432,6 @@ const BUILTIN_SYNCED_LYRICS = {
 
                     <span class="ym-label">Скрыть кнопку «Качество звука»</span>
 
-                    <span class="ym-desc">Убирает значок HQ / Lossless из плеера</span>
-
                   </div>
 
                   <label class="ym-switch">
@@ -6392,8 +6451,6 @@ const BUILTIN_SYNCED_LYRICS = {
                   <div class="ym-col-info">
 
                     <span class="ym-label">Скрыть кнопку «Предыдущий трек»</span>
-
-                    <span class="ym-desc">Оставляет только кнопки воспроизведения и перехода вперёд</span>
 
                   </div>
 
@@ -6415,8 +6472,6 @@ const BUILTIN_SYNCED_LYRICS = {
 
                     <span class="ym-label">Скрыть кнопку «Текст песни»</span>
 
-                    <span class="ym-desc">Убирает штатную кнопку караоке из нижнего плеера</span>
-
                   </div>
 
                   <label class="ym-switch">
@@ -6429,19 +6484,12 @@ const BUILTIN_SYNCED_LYRICS = {
 
                 </div>
 
-              </div>
-
-            </div>
-
-
-
-            <!-- TAB 3: FONTS -->
-
-            <div class="ym-tab-pane" id="tab-fonts">
+              </div></section></div>
+<div class="ym-tab-pane" id="tab-fonts">
 
               <div class="ym-card">
 
-                <div class="ym-card-title">Кастомная типографика</div>
+                <div class="ym-card-title">Текст приложения</div>
 
                 
 
@@ -6449,9 +6497,9 @@ const BUILTIN_SYNCED_LYRICS = {
 
                   <div class="ym-col-info">
 
-                    <span class="ym-label">Включить замену шрифта</span>
+                    <span class="ym-label">Свой шрифт</span>
 
-                    <span class="ym-desc">Применять выбранный шрифт ко всему интерфейсу приложения</span>
+                    <span class="ym-desc">Для приложения и настроек мода</span>
 
                   </div>
 
@@ -6471,9 +6519,9 @@ const BUILTIN_SYNCED_LYRICS = {
 
                   <div class="ym-col-info">
 
-                    <span class="ym-label">Семейство шрифтов</span>
+                    <span class="ym-label">Шрифт</span>
 
-                    <span class="ym-desc">Встроенные игровые, ретро и современные шрифты с поддержкой кириллицы</span>
+                    <span class="ym-desc">Встроенные шрифты с кириллицей</span>
 
                   </div>
 
@@ -6493,8 +6541,8 @@ const BUILTIN_SYNCED_LYRICS = {
 
                 <div class="ym-row">
                   <div class="ym-col-info">
-                    <span class="ym-label">Эффекты шрифта и анимации</span>
-                    <span class="ym-desc">Снегопад, тыквы на Хэллоуин, неоновый глитч и кубический стиль</span>
+                    <span class="ym-label">Эффекты шрифта</span>
+                    <span class="ym-desc">Зависят от выбранного шрифта</span>
                   </div>
                   <label class="ym-switch">
                     <input type="checkbox" id="opt-font-effects" checked />
@@ -6502,28 +6550,9 @@ const BUILTIN_SYNCED_LYRICS = {
                   </label>
                 </div>
 
-                <div class="ym-row" style="flex-direction:column;align-items:flex-start;gap:8px;">
-                  <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
-                    <div class="ym-col-info">
-                      <span class="ym-label">Размер шрифта приложения</span>
-                      <span class="ym-desc">Масштабирование текста по всему интерфейсу</span>
-                    </div>
-                    <span id="ym-font-size-val" style="font-size:12px;font-weight:700;color:#ff2d3c;background:rgba(255,45,60,0.12);padding:2px 8px;border-radius:8px;">100%</span>
-                  </div>
-                  <input type="range" class="ym-range" id="opt-font-size" min="80" max="140" step="5" value="100" style="width:100%;" />
-                </div>
+                <div class="ym-row"><div class="ym-col-info"><span class="ym-label">Размер шрифта приложения</span><span class="ym-desc">Масштаб текста во всём приложении</span></div><div class="ym-range-wrap"><input type="range" class="ym-range" id="opt-font-size" min="80" max="140" step="5" value="100"/><output class="ym-range-val" id="ym-font-size-val" for="opt-font-size">100%</output></div></div>
 
-                <div class="ym-row" style="flex-direction:column;align-items:flex-start;gap:8px;">
-                  <div style="display:flex;justify-content:space-between;width:100%;align-items:center;">
-                    <div class="ym-col-info">
-                      <span class="ym-label">Размер шрифта настроек мода</span>
-                      <span class="ym-desc">Масштаб текста внутри этого окна настроек</span>
-                    </div>
-                    <span id="ym-modal-font-size-val" style="font-size:12px;font-weight:700;color:#ff2d3c;background:rgba(255,45,60,0.12);padding:2px 8px;border-radius:8px;">100%</span>
-                  </div>
-                  <input type="range" class="ym-range" id="opt-modal-font-size" min="80" max="140" step="5" value="100" style="width:100%;" />
-
-                </div>
+                <div class="ym-row"><div class="ym-col-info"><span class="ym-label">Размер шрифта меню</span><span class="ym-desc">Масштаб текста только в настройках мода</span></div><div class="ym-range-wrap"><input type="range" class="ym-range" id="opt-modal-font-size" min="80" max="200" step="5" value="100"/><output class="ym-range-val" id="ym-modal-font-size-val" for="opt-modal-font-size">100%</output></div></div>
 
 
 
@@ -6531,9 +6560,9 @@ const BUILTIN_SYNCED_LYRICS = {
 
                   <div class="ym-col-info">
 
-                    <span class="ym-label">Пользовательский шрифт</span>
+                    <span class="ym-label">Шрифт из Windows</span>
 
-                    <span class="ym-desc">Имя любого системного шрифта Windows (Arial, Segoe UI, Comic Sans...)</span>
+                    <span class="ym-desc">Введите название установленного шрифта</span>
 
                   </div>
 
@@ -6545,35 +6574,14 @@ const BUILTIN_SYNCED_LYRICS = {
 
 
 
-              <!-- Live Font Preview -->
 
-              <div class="ym-card ym-font-preview-card">
-
-                <div class="ym-card-title">Предпросмотр шрифта</div>
-
-                <div class="ym-font-preview-box" id="font-preview-box">
-
-                  <div class="ym-preview-title">Яндекс Музыка</div>
-
-                  <div class="ym-preview-body">Съешь же ещё этих мягких французских булок, да выпей чаю.</div>
-
-                  <div class="ym-preview-sub">The quick brown fox jumps over the lazy dog • 0123456789 • ♫ ♪ ♬</div>
-
-                </div>
-
-              </div>
 
             </div>
-
-
-
-            <!-- TAB 4: OVERLAY -->
-
-            <div class="ym-tab-pane" id="tab-overlay">
+<div class="ym-tab-pane" id="tab-overlay">
 
               <div class="ym-card">
 
-                <div class="ym-card-title">Игровой HUD Оверлей</div>
+                <div class="ym-card-title">Поверх других окон</div>
 
                 <div class="ym-row">
 
@@ -6678,16 +6686,11 @@ const BUILTIN_SYNCED_LYRICS = {
               </div>
 
             </div>
-
-
-
-            <!-- TAB 5: KARAOKE -->
-
-            <div class="ym-tab-pane" id="tab-karaoke">
+<div class="ym-tab-pane" id="tab-karaoke">
 
               <div class="ym-card">
 
-                <div class="ym-card-title">Плавающее Караоке</div>
+                <div class="ym-card-title">Тексты поверх окон</div>
 
                 <div class="ym-row">
 
@@ -6726,24 +6729,17 @@ const BUILTIN_SYNCED_LYRICS = {
               </div>
 
             </div>
+<div class="ym-tab-pane" id="tab-tweaks"><div class="ym-card">
 
-
-
-            <!-- TAB 6: TWEAKS -->
-
-            <div class="ym-tab-pane" id="tab-tweaks">
-
-              <div class="ym-card">
-
-                <div class="ym-card-title">Discord и твики</div>
+                <div class="ym-card-title">Discord</div>
 
                 <div class="ym-row">
 
                   <div class="ym-col-info">
 
-                    <span class="ym-label">Discord Rich Presence (RPC)</span>
+                    <span class="ym-label">Показывать музыку в Discord</span>
 
-                    <span class="ym-desc">Отображение текущего трека, обложки и времени в вашем Discord статусе</span>
+                    <span class="ym-desc">Текущий трек, обложка и время</span>
 
                   </div>
 
@@ -6759,8 +6755,8 @@ const BUILTIN_SYNCED_LYRICS = {
 
                 <div class="ym-row" id="row-discord-app-title">
                   <div class="ym-col-info">
-                    <span class="ym-label">Название активности в Discord</span>
-                    <span class="ym-desc">Выберите имя приложения в статусе Discord</span>
+                    <span class="ym-label">Название приложения</span>
+                    <span class="ym-desc">Как музыка подписана в статусе</span>
                   </div>
                   <select class="ym-select" id="opt-discord-app-title">
                     <option value="ru">🇷🇺 Яндекс Музыка (Слушает Яндекс Музыка)</option>
@@ -6805,104 +6801,22 @@ const BUILTIN_SYNCED_LYRICS = {
 
 
 
-                <div class="ym-row">
-                  <div class="ym-col-info">
-                    <span class="ym-label">🛡️ Блокировать обновления приложения</span>
-                    <span class="ym-desc">Отключает уведомления и автозагрузку обновлений Яндекс Музыки для защиты мода от слетания</span>
-                  </div>
-                  <label class="ym-switch">
-                    <input type="checkbox" id="opt-block-app-updates" checked>
-                    <span class="ym-slider"></span>
-                  </label>
                 </div>
 
-                <div class="ym-row">
-
-                  <div class="ym-col-info">
-
-                    <span class="ym-label">Авто-выбор максимального качества</span>
-
-                    <span class="ym-desc">Принудительно запрашивать максимальный доступный аудиобитрейт</span>
-
-                  </div>
-
-                  <label class="ym-switch">
-
-                    <input type="checkbox" id="opt-auto-quality">
-
-                    <span class="ym-slider"></span>
-
-                  </label>
-
-                </div>
-
-
-
-                <div class="ym-row">
-
-                  <div class="ym-col-info">
-
-                    <span class="ym-label">Масштаб интерфейса</span>
-
-                    <span class="ym-desc">Регулировка масштабирования элементов окна</span>
-
-                  </div>
-
-                  <select class="ym-select" id="opt-ui-scale">
-
-                    <option value="0.8">80%</option>
-
-                    <option value="0.9">90%</option>
-
-                    <option value="1.0">100% (По умолчанию)</option>
-
-                    <option value="1.1">110%</option>
-
-                    <option value="1.25">125%</option>
-
-                  </select>
-
-                </div>
-
-
-
-                <div class="ym-row">
-
-                  <div class="ym-col-info">
-
-                    <span class="ym-label">Консоль отладки</span>
-
-                    <span class="ym-desc">Открыть Chrome Developer Tools для инспекции элементов</span>
-
-                  </div>
-
-                  <button class="ym-btn-action ym-btn-secondary" id="btn-open-devtools">
-
-                    Открыть DevTools
-
-                  </button>
-
-                </div>
-
-              </div>
+              
 
             </div>
-
-
-
-            <!-- TAB 7: ABOUT -->
-
-            <div class="ym-tab-pane" id="tab-about">
+<div class="ym-tab-pane" id="tab-about"><div class="ym-card"><div class="ym-card-title">Обновления</div><div class="ym-row"><div class="ym-col-info"><span class="ym-label">Версия мода <span data-mod-version></span></span><span id="ym-update-status" class="ym-desc" role="status" aria-live="polite">Проверка ещё не выполнялась</span></div><button class="ym-btn-action" id="btn-check-mod-update">Проверить обновления</button></div><div class="ym-row"><div class="ym-col-info"><span class="ym-label">Проверять автоматически</span><span class="ym-desc">При запуске и каждые 6 часов. Установка вручную.</span></div><label class="ym-switch"><input type="checkbox" id="opt-mod-auto-updates" checked><span class="ym-slider"></span></label></div></div>
 
               <div class="ym-card">
 
-                <div class="ym-card-title">О моде</div>
+                <div class="ym-card-title">Музыка Mod</div>
 
-                <p style="font-size:13px;color:rgba(255,255,255,0.65);line-height:1.6;margin:0 0 12px 0;">
+                <p class="ym-about-description">
 
                   Модификация для официального настольного клиента Яндекс Музыки (версия 5.124.1).<br>
 
-                  Включает разблокировку Яндекс Плюс, кастомные шрифты с поддержкой кириллицы, игровой оверлей, плавающее караоке с каскадным поиском текстов и синхронизацию Discord RPC.
+                  Оформление, шрифты, обои и инструменты для музыки.
 
                 </p>
 
@@ -6916,24 +6830,21 @@ const BUILTIN_SYNCED_LYRICS = {
 
                 <div class="ym-row" style="border-top:1px solid rgba(255,255,255,0.06);padding-top:14px;margin-top:12px;">
                   <div class="ym-col-info">
-                    <span class="ym-label">💡 Есть идея или пожелание?</span>
-                    <span class="ym-desc">Предложите новую функцию или улучшение создателю мода</span>
+                    <span class="ym-label">Предложить улучшение</span>
+                    <span class="ym-desc">Открыть форму предложения</span>
                   </div>
-                  <button class="ym-btn-action" id="ym-btn-open-proposal" style="background:#ff2d3c;color:#fff;font-weight:700;">
+                  <button class="ym-btn-action" id="ym-btn-open-proposal" >
                     Предложить идею
                   </button>
                 </div>
 
               </div>
 
-            </div>
-
-          </div>
-
+            </div></div>
+          </section>
         </div>
-
+        <footer class="ym-glass-footer"><span><i aria-hidden="true"></i>Сохраняется автоматически</span><span>Ctrl + Shift + S <span aria-hidden="true">·</span> Esc — закрыть</span></footer>
       </div>
-
     `;
 
 
@@ -6945,11 +6856,9 @@ const BUILTIN_SYNCED_LYRICS = {
       if (tabsContainer && contentContainer) {
         const adminBtn = document.createElement("button");
         adminBtn.className = "ym-tab-btn";
+        adminBtn.hidden = true;
         adminBtn.setAttribute("data-tab", "tab-admin");
-        adminBtn.innerHTML = `
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="#ff2d3c" style="filter:drop-shadow(0 0 6px rgba(255,45,60,0.8));vertical-align:middle;margin-right:6px;"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg>
-          <span>Панель Создателя</span>
-        `;
+        adminBtn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16M13 9h4m-4 5h4"/></svg><span>Панель создателя</span>`;
         tabsContainer.appendChild(adminBtn);
 
         const adminPane = document.createElement("div");
@@ -6957,7 +6866,7 @@ const BUILTIN_SYNCED_LYRICS = {
         adminPane.id = "tab-admin";
         adminPane.innerHTML = `
           <div class="ym-card">
-            <div class="ym-card-title" style="color:#ff2d3c;display:flex;align-items:center;gap:8px;"><svg viewBox="0 0 24 24" width="20" height="20" fill="#ff2d3c" style="filter:drop-shadow(0 0 8px rgba(255,45,60,0.8));"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z"/></svg><span>Панель Создателя мода</span></div>
+            <div class="ym-card-title">Панель создателя мода</div>
             <p style="font-size:13px;color:rgba(255,255,255,0.7);margin:0 0 14px 0;">
               Привет, Алексей! Здесь отображаются предложения и идеи пользователей твоего мода.
             </p>
@@ -6971,6 +6880,21 @@ const BUILTIN_SYNCED_LYRICS = {
           </div>
         `;
         contentContainer.appendChild(adminPane);
+        const creatorEntry = document.createElement('button');
+        creatorEntry.type = 'button'; creatorEntry.id = 'ym-open-creator';
+        creatorEntry.className = 'ym-btn-action ym-btn-secondary';
+        creatorEntry.textContent = 'Открыть';
+        creatorEntry.setAttribute('aria-label','Открыть панель создателя');
+        creatorEntry.addEventListener('click', () => adminBtn.click());
+        const creatorCard = document.createElement('div');
+        creatorCard.className = 'ym-card';
+        const creatorRow = document.createElement('div');
+        creatorRow.className = 'ym-row';
+        const creatorLabel = document.createElement('span');
+        creatorLabel.className = 'ym-label';
+        creatorLabel.textContent = 'Панель создателя';
+        creatorRow.append(creatorLabel,creatorEntry);creatorCard.append(creatorRow);
+        backdrop.querySelector('#tab-about').appendChild(creatorCard);
 
         adminBtn.addEventListener("click", () => {
           loadAdminProposals();
@@ -6989,7 +6913,7 @@ const BUILTIN_SYNCED_LYRICS = {
     const modalLogo = backdrop.querySelector(".ym-modal-logo");
     if (modalLogo) {
       modalLogo.style.cursor = "pointer";
-      modalLogo.title = "Версия v1.5.0";
+      modalLogo.title = "О моде";
       modalLogo.addEventListener("click", () => {
         logoClicks++;
         clearTimeout(logoTimer);
@@ -6998,9 +6922,10 @@ const BUILTIN_SYNCED_LYRICS = {
           logoClicks = 0;
           const cur = localStorage.getItem("ym_mod_is_admin") === "true";
           localStorage.setItem("ym_mod_is_admin", cur ? "false" : "true");
-          showToast(cur ? "🔒 Режим создателя отключен" : "👑 Режим создателя активирован!");
+          showToast(cur ? "🔒 Режим создателя отключен" : "Режим создателя включён");
           closeModSettings();
-          setTimeout(showModSettingsModal, 300);
+          backdrop.remove();
+          setTimeout(openModSettings, 0);
         }
       });
     }
@@ -7009,35 +6934,8 @@ const BUILTIN_SYNCED_LYRICS = {
 
 
 
-    // Tab Switching
-
-    const tabBtns = backdrop.querySelectorAll(".ym-tab-btn");
-
-    const tabPanes = backdrop.querySelectorAll(".ym-tab-pane");
-
-
-
-    tabBtns.forEach((btn) => {
-
-      btn.addEventListener("click", () => {
-
-        tabBtns.forEach((b) => b.classList.remove("active"));
-
-        tabPanes.forEach((p) => p.classList.remove("active"));
-
-        btn.classList.add("active");
-
-        const targetId = btn.getAttribute("data-tab");
-
-        const targetPane = document.getElementById(targetId);
-
-        if (targetPane) targetPane.classList.add("active");
-
-      });
-
-    });
-
-
+    initGlassSettings(backdrop);
+    backdrop.inert = true;
 
     // Close handlers
 
@@ -7081,7 +6979,7 @@ const BUILTIN_SYNCED_LYRICS = {
       optFontEffects.addEventListener("change", () => {
         saveSetting("typography/fontEffects", optFontEffects.checked);
         applyFont(optFontFamily ? optFontFamily.value : "Terraria", optFontEnabled ? optFontEnabled.checked : true);
-        showToast(optFontEffects.checked ? "Эффекты шрифта включены" : "Эффекты шрифта отключены");
+
       });
     }
 
@@ -7116,8 +7014,6 @@ const BUILTIN_SYNCED_LYRICS = {
     const optFontFamily = document.getElementById("opt-font-family");
 
     const optFontCustom = document.getElementById("opt-font-custom");
-
-    const previewBox = document.getElementById("font-preview-box");
 
 
 
@@ -7452,13 +7348,10 @@ const BUILTIN_SYNCED_LYRICS = {
 
     if (optFontFamily) {
 
-      optFontFamily.value = modSettings["font-changer/savedFont"] || "Terraria";
-
-      if (previewBox) {
-
-        previewBox.style.fontFamily = `"${optFontFamily.value}", sans-serif`;
-
-      }
+      const savedFont = modSettings["font-changer/savedFont"] || "Terraria";
+      if (![...optFontFamily.options].some(option => option.value === savedFont)) optFontFamily.add(new Option(savedFont, savedFont));
+      optFontFamily.value = savedFont;
+      if (optFontCustom) optFontCustom.value = savedFont;
 
     }
 
@@ -7519,7 +7412,7 @@ const BUILTIN_SYNCED_LYRICS = {
 
     // Palette swatches
 
-    const swatches = document.querySelectorAll(".ym-color-swatch");
+    const swatches = backdrop.querySelectorAll("#tab-appearance .ym-palette-wrap:not(#trackbar-palette) .ym-color-swatch");
 
     const customColor = document.getElementById("opt-custom-color");
 
@@ -7578,8 +7471,9 @@ const BUILTIN_SYNCED_LYRICS = {
       optDesignMode.addEventListener("change", () => {
 
         saveSetting("design/mode", optDesignMode.value);
+        applyTheme(modSettings["custom-themes/accent"] || "#8b5cf6", true);
 
-        showToast("Стиль оформления обновлен", true);
+
 
       });
 
@@ -7781,12 +7675,6 @@ const BUILTIN_SYNCED_LYRICS = {
 
         applyFont(optFontFamily.value, optFontEnabled ? optFontEnabled.checked : true);
 
-        if (previewBox) {
-
-          previewBox.style.fontFamily = `"${optFontFamily.value}", sans-serif`;
-
-        }
-
         showToast(`Шрифт: ${optFontFamily.value}`);
 
       });
@@ -7805,13 +7693,11 @@ const BUILTIN_SYNCED_LYRICS = {
 
           saveSetting("font-changer/savedFont", sanitizedFont);
 
+          if (![...optFontFamily.options].some(option => option.value === sanitizedFont)) optFontFamily.add(new Option(sanitizedFont, sanitizedFont));
+          optFontFamily.value = sanitizedFont;
+          if (optFontEnabled) optFontEnabled.checked = true;
+          saveSetting("font-changer/enabled", true);
           applyFont(sanitizedFont, true);
-
-          if (previewBox) {
-
-            previewBox.style.fontFamily = `"${sanitizedFont}", sans-serif`;
-
-          }
 
           showToast(`Шрифт: ${sanitizedFont}`);
 
@@ -7858,9 +7744,9 @@ const BUILTIN_SYNCED_LYRICS = {
         saveSetting("system/blockAppUpdates", optBlockAppUpdates.checked);
         if (optBlockAppUpdates.checked) {
           removeOfficialUpdateBanners();
-          showToast("🛡️ Защита от обновлений включена");
+
         } else {
-          showToast("⚠️ Защита от обновлений отключена");
+
         }
       });
     }
@@ -7873,7 +7759,6 @@ const BUILTIN_SYNCED_LYRICS = {
 
         applyAutoQuality();
 
-        showToast(optAutoQuality.checked ? "Авто-качество включено" : "Авто-качество выключено");
 
       });
 
@@ -7891,7 +7776,6 @@ const BUILTIN_SYNCED_LYRICS = {
 
         applyScale(scaleVal);
 
-        showToast(`Масштаб: ${Math.round(scaleVal * 100)}%`);
 
       });
 
@@ -7938,6 +7822,7 @@ const BUILTIN_SYNCED_LYRICS = {
   function saveSetting(key, value) {
 
     modSettings[key] = value;
+    updateGlassSettings();
 
     if (window.yandexMusicMod && window.yandexMusicMod.setStorageValue) {
 
@@ -7961,6 +7846,7 @@ const BUILTIN_SYNCED_LYRICS = {
 
   // ==========================================
 
+  let settingsReturnFocus = null;
   function openModSettings() {
     let backdrop = document.getElementById("ym-mod-modal-backdrop");
     if (!backdrop) {
@@ -7968,7 +7854,14 @@ const BUILTIN_SYNCED_LYRICS = {
       backdrop = document.getElementById("ym-mod-modal-backdrop");
     }
     if (backdrop) {
+      if (!backdrop.contains(document.activeElement)) settingsReturnFocus = document.activeElement;
+      backdrop.inert = false;
       backdrop.classList.add("open");
+      requestAnimationFrame(() => {
+        const modal=backdrop.querySelector('#ym-mod-modal');
+        if(modal?.dataset.page==='home')modal.querySelector('.ym-hub').scrollTop=0;
+        modal?.focus({preventScroll:true});
+      });
       const optWpEnable = document.getElementById("opt-wallpaper-enable");
       if (optWpEnable) optWpEnable.checked = !!modSettings["wallpaper/enabled"];
     }
@@ -7978,6 +7871,8 @@ const BUILTIN_SYNCED_LYRICS = {
     const backdrop = document.getElementById("ym-mod-modal-backdrop");
     if (backdrop) {
       backdrop.classList.remove("open");
+      backdrop.inert = true;
+      if (settingsReturnFocus?.isConnected) settingsReturnFocus.focus();
     }
   }
 
@@ -8086,7 +7981,7 @@ const BUILTIN_SYNCED_LYRICS = {
 
           <span class="ym-mod-btn-text">Настройки Мода</span>
 
-          <span class="ym-mod-ver-tag">v1.5.0</span>
+          <span class="ym-mod-ver-tag">${currentModVersion ? "v" + currentModVersion : ""}</span>
 
         `;
 
@@ -8602,6 +8497,7 @@ const BUILTIN_SYNCED_LYRICS = {
       if (sonataMeta && title) {
         if (!artists && nativeArtist) artists = nativeArtist;
         if (!coverUrl && nativeCover) coverUrl = nativeCover;
+        if (!coverUrl && domCover) coverUrl = domCover;
         if (!album && nativeAlbum) album = nativeAlbum;
       } else if (nativeTitle) {
         const tLow = (title || "").toLowerCase();
@@ -8614,6 +8510,7 @@ const BUILTIN_SYNCED_LYRICS = {
         if (fiberMatches) {
           if (!artists) artists = nativeArtist;
           if (!coverUrl) coverUrl = nativeCover;
+          if (!coverUrl && domCover) coverUrl = domCover;
           if (!album) album = nativeAlbum;
         } else if (domMatches) {
           title = domTitle;
@@ -8626,13 +8523,14 @@ const BUILTIN_SYNCED_LYRICS = {
           title = nativeTitle;
           artists = nativeArtist;
           if (nativeCover) coverUrl = nativeCover;
+          else if (domCover) coverUrl = domCover;
           if (nativeAlbum) album = nativeAlbum;
           if (!trackId && domTrackId) trackId = domTrackId;
         }
       } else {
         if (!title) title = domTitle;
         if (!artists || artists === "Яндекс Музыка") artists = domArtists;
-        if (!coverUrl) coverUrl = domCover;
+        if (!coverUrl) coverUrl = domCover || nativeCover;
         if (!trackId) trackId = domTrackId;
 
         // Fallback to document.title ONLY if neither Fiber nor DOM provided a track title
@@ -8645,6 +8543,17 @@ const BUILTIN_SYNCED_LYRICS = {
               title = deduplicateMarqueeText(parts[0].trim());
               if (!artists || artists === "Яндекс Музыка") artists = deduplicateMarqueeText(parts.slice(1).join(sep).trim());
             }
+          }
+        }
+      }
+
+      // Universal cover fallback: never leave coverUrl empty if any source has it
+      if (!coverUrl) {
+        if (domCover) coverUrl = domCover;
+        else if (nativeCover) coverUrl = nativeCover;
+        else if (window.__lastPlayerState?.track?.coverUrl) {
+          if (window.__lastPlayerState.track.id === trackId || window.__lastPlayerState.track.title === title) {
+            coverUrl = window.__lastPlayerState.track.coverUrl;
           }
         }
       }
@@ -8683,12 +8592,12 @@ const BUILTIN_SYNCED_LYRICS = {
         }
       }
 
-      // Confirm Play/Pause status via Button presence
-      const pauseBtn = document.querySelector('button[data-test-id="PAUSE_BUTTON"], button[data-test-id="MY_VIBE_PAUSE_BUTTON"]');
+      // Confirm Play/Pause status via Button presence strictly inside Desktop Playerbar
+      const pauseBtn = desktopPlayer ? desktopPlayer.querySelector('button[data-test-id="PAUSE_BUTTON"], button[data-test-id="MY_VIBE_PAUSE_BUTTON"]') : document.querySelector('section[data-test-id="PLAYERBAR_DESKTOP"] button[data-test-id="PAUSE_BUTTON"]');
       if (pauseBtn) {
         isPlaying = true;
       } else {
-        const playBtn = document.querySelector('button[data-test-id="PLAY_BUTTON"], button[data-test-id="MY_VIBE_PLAY_BUTTON"]');
+        const playBtn = desktopPlayer ? desktopPlayer.querySelector('button[data-test-id="PLAY_BUTTON"], button[data-test-id="MY_VIBE_PLAY_BUTTON"]') : document.querySelector('section[data-test-id="PLAYERBAR_DESKTOP"] button[data-test-id="PLAY_BUTTON"]');
         if (playBtn && activeAudio && activeAudio.paused) {
           isPlaying = false;
         }
@@ -9084,42 +8993,78 @@ const BUILTIN_SYNCED_LYRICS = {
     const activeAudio = typeof window.__ymGetActiveAudio === "function" ? window.__ymGetActiveAudio() : null;
 
     if (action === "playPause") {
-      const pauseBtn = document.querySelector(
-        'section[data-test-id="PLAYERBAR_DESKTOP"] button[data-test-id="PAUSE_BUTTON"], button[data-test-id="PAUSE_BUTTON"], button[data-test-id="MY_VIBE_PAUSE_BUTTON"], button[aria-label*="Пауза" i], button[aria-label*="pause" i]'
-      );
-      const playBtn = document.querySelector(
-        'section[data-test-id="PLAYERBAR_DESKTOP"] button[data-test-id="PLAY_BUTTON"], button[data-test-id="PLAY_BUTTON"], button[data-test-id="MY_VIBE_PLAY_BUTTON"], button[aria-label*="Играть" i], button[aria-label*="play" i]'
-      );
-
       let handled = false;
-      if (pauseBtn) {
+
+      // Priority 1: Direct Sonata Player API (safe, never clicks background page)
+      const sonata = window.__sonata || window.sonata || findSonataPlayer();
+      if (sonata && typeof sonata.togglePlay === "function") {
         try {
-          const fiber = findFiberNode(pauseBtn);
-          if (fiber && fiber.memoizedProps && typeof fiber.memoizedProps.onClick === "function") {
-            fiber.memoizedProps.onClick({ stopPropagation: () => {}, preventDefault: () => {} });
-            handled = true;
-          }
-        } catch(e) {}
-        if (!handled) triggerClick(pauseBtn);
-        if (activeAudio) try { activeAudio.pause(); } catch(e) {}
-      } else if (playBtn) {
-        try {
-          const fiber = findFiberNode(playBtn);
-          if (fiber && fiber.memoizedProps && typeof fiber.memoizedProps.onClick === "function") {
-            fiber.memoizedProps.onClick({ stopPropagation: () => {}, preventDefault: () => {} });
-            handled = true;
-          }
-        } catch(e) {}
-        if (!handled) triggerClick(playBtn);
-        if (activeAudio) try { activeAudio.play().catch(() => {}); } catch(e) {}
-      } else {
-        const sonata = findSonataPlayer();
-        if (sonata && typeof sonata.togglePlay === "function") {
-          try { sonata.togglePlay(); } catch(e) {}
-        } else {
-          window.dispatchEvent(new KeyboardEvent("keydown", { key: " ", code: "Space", keyCode: 32, bubbles: true }));
+          sonata.togglePlay();
+          handled = true;
+        } catch (e) {
+          console.warn("[Mod] sonata.togglePlay() error:", e);
         }
       }
+
+      // Priority 2: Scoped Playerbar Buttons (strictly within PLAYERBAR_DESKTOP)
+      if (!handled) {
+        const desktopBar = document.querySelector('section[data-test-id="PLAYERBAR_DESKTOP"], [data-test-id="VIBE_PLAYERBAR"], [class*="PlayerBar_root"]');
+        if (desktopBar) {
+          const pauseBtn = desktopBar.querySelector('button[data-test-id="PAUSE_BUTTON"], button[data-test-id="MY_VIBE_PAUSE_BUTTON"], button[data-test-id*="PAUSE" i], button[aria-label*="Пауза" i], button[aria-label*="pause" i]');
+          const playBtn = desktopBar.querySelector('button[data-test-id="PLAY_BUTTON"], button[data-test-id="MY_VIBE_PLAY_BUTTON"], button[data-test-id*="PLAY" i], button[aria-label*="Воспроизвести" i], button[aria-label*="Играть" i], button[aria-label*="play" i]');
+
+          if (pauseBtn) {
+            try {
+              const fiber = findFiberNode(pauseBtn);
+              if (fiber && fiber.memoizedProps && typeof fiber.memoizedProps.onClick === "function") {
+                fiber.memoizedProps.onClick({ stopPropagation: () => {}, preventDefault: () => {} });
+                handled = true;
+              }
+            } catch(e) {}
+            if (!handled) {
+              triggerClick(pauseBtn);
+              handled = true;
+            }
+            if (activeAudio) try { activeAudio.pause(); } catch(e) {}
+          } else if (playBtn) {
+            try {
+              const fiber = findFiberNode(playBtn);
+              if (fiber && fiber.memoizedProps && typeof fiber.memoizedProps.onClick === "function") {
+                fiber.memoizedProps.onClick({ stopPropagation: () => {}, preventDefault: () => {} });
+                handled = true;
+              }
+            } catch(e) {}
+            if (!handled) {
+              triggerClick(playBtn);
+              handled = true;
+            }
+            if (activeAudio) try { activeAudio.play().catch(() => {}); } catch(e) {}
+          }
+        }
+      }
+
+      // Priority 3: HTML5 audio element
+      if (!handled && activeAudio) {
+        try {
+          if (activeAudio.paused) {
+            activeAudio.play().catch(() => {});
+          } else {
+            activeAudio.pause();
+          }
+          handled = true;
+        } catch(e) {}
+      }
+
+      // Priority 4: Space keyboard shortcut
+      if (!handled) {
+        window.dispatchEvent(new KeyboardEvent("keydown", { key: " ", code: "Space", keyCode: 32, bubbles: true }));
+      }
+
+      [30, 100, 250, 500].forEach((delay) => {
+        setTimeout(() => {
+          if (typeof triggerImmediatePlayerSync === "function") triggerImmediatePlayerSync();
+        }, delay);
+      });
     } else if (action === "next") {
       let handled = false;
       const sonata = window.__sonata || window.sonata || findSonataPlayer();
@@ -9130,9 +9075,8 @@ const BUILTIN_SYNCED_LYRICS = {
         } catch(e) {}
       }
       if (!handled) {
-        const nextBtn = document.querySelector(
-          'section[data-test-id="PLAYERBAR_DESKTOP"] button[data-test-id="NEXT_TRACK_BUTTON"], section[data-test-id="PLAYERBAR_DESKTOP"] button[data-test-id*="NEXT" i], button[data-test-id="NEXT_TRACK_BUTTON"], button[data-test-id="sonata.NEXT_TRACK_BUTTON"], button[data-test-id="NEXT_BUTTON"], button[aria-label*="Следующий" i], button[aria-label*="next" i]'
-        );
+        const desktopBar = document.querySelector('section[data-test-id="PLAYERBAR_DESKTOP"], [data-test-id="VIBE_PLAYERBAR"], [class*="PlayerBar_root"]');
+        const nextBtn = desktopBar ? desktopBar.querySelector('button[data-test-id="NEXT_TRACK_BUTTON"], button[data-test-id="sonata.NEXT_TRACK_BUTTON"], button[data-test-id*="NEXT" i], button[data-test-id="NEXT_BUTTON"], button[aria-label*="Следующий" i], button[aria-label*="next" i]') : document.querySelector('section[data-test-id="PLAYERBAR_DESKTOP"] button[data-test-id="NEXT_TRACK_BUTTON"]');
         if (nextBtn && !nextBtn.disabled && nextBtn.getAttribute("aria-disabled") !== "true") {
           try {
             const fiber = findFiberNode(nextBtn);
@@ -9152,9 +9096,8 @@ const BUILTIN_SYNCED_LYRICS = {
         }, delay);
       });
     } else if (action === "prev") {
-      const prevBtn = document.querySelector(
-        'section[data-test-id="PLAYERBAR_DESKTOP"] button[data-test-id="PREVIOUS_TRACK_BUTTON"], section[data-test-id="PLAYERBAR_DESKTOP"] button[data-test-id*="PREV" i], button[data-test-id="PREVIOUS_TRACK_BUTTON"], button[data-test-id="sonata.PREVIOUS_TRACK_BUTTON"], button[data-test-id="PREV_BUTTON"], button[aria-label*="Предыдущий" i], button[aria-label*="prev" i]'
-      );
+      const desktopBar = document.querySelector('section[data-test-id="PLAYERBAR_DESKTOP"], [data-test-id="VIBE_PLAYERBAR"], [class*="PlayerBar_root"]');
+      const prevBtn = desktopBar ? desktopBar.querySelector('button[data-test-id="PREVIOUS_TRACK_BUTTON"], button[data-test-id="sonata.PREVIOUS_TRACK_BUTTON"], button[data-test-id*="PREV" i], button[data-test-id="PREV_BUTTON"], button[aria-label*="Предыдущий" i], button[aria-label*="prev" i]') : document.querySelector('section[data-test-id="PLAYERBAR_DESKTOP"] button[data-test-id="PREVIOUS_TRACK_BUTTON"]');
       let handled = false;
       const isPrevDisabled = prevBtn && (prevBtn.disabled || prevBtn.getAttribute("aria-disabled") === "true" || prevBtn.classList.contains("disabled"));
 
@@ -9638,13 +9581,3 @@ const BUILTIN_SYNCED_LYRICS = {
   }
 
 })();
-
-
-  // Global click handler for open-proposal
-  document.addEventListener('click', (e) => {
-    if (e.target && (e.target.id === 'ym-btn-open-proposal' || e.target.closest('#ym-btn-open-proposal'))) {
-      e.preventDefault();
-      e.stopPropagation();
-      openProposalModal();
-    }
-  });

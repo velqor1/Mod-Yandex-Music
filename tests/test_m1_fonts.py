@@ -44,19 +44,22 @@ def test_fonts():
         "Andy Bold",
         "Terraria",
         "Press Start 2P",
-        "VT323",
-        "Uncut Sans"
+        "Marck Script",
+        "Ruslan Display",
+        "Rubik Glitch",
+        "Kelly Slab"
     ]
     for fam in font_families:
         pattern = r'@font-face\s*\{[^}]*font-family:\s*"' + re.escape(fam) + r'"[^}]*\}'
         matches = re.findall(pattern, css, re.DOTALL)
         assert len(matches) > 0, f"Missing @font-face for {fam}"
         for m in matches:
-            b64_match = re.search(r'url\("data:font/woff2;base64,([^"]+)"\)', m)
-            assert b64_match, f"Missing Base64 data URI in @font-face for {fam}"
-            decoded = base64.b64decode(b64_match.group(1))
-            assert decoded[:4] == b"wOF2", f"Corrupt decoded WOFF2 data for {fam}"
-        print(f"  [+] \"{fam}\": {len(matches)} @font-face rule(s) verified with valid wOF2 data URIs")
+            embedded = re.findall(r'url\("data:font/(woff2?);base64,([^"]+)"\)', m)
+            assert embedded, f"Missing embedded font in @font-face for {fam}"
+            for fmt, encoded in embedded:
+                decoded = base64.b64decode(encoded, validate=True)
+                assert decoded[:4] == (b"wOF2" if fmt == "woff2" else b"wOFF"), f"Corrupt {fmt} data for {fam}"
+        print(f"  [+] \"{fam}\": {len(matches)} embedded font rule(s) verified")
     print("-> Step 2 PASSED!")
 
     # 3. Check applyFont() and scale adjustments in mod-renderer.js
@@ -65,15 +68,13 @@ def test_fonts():
         js = f.read()
 
     assert "function applyFont(fontName, enabled = true)" in js, "Missing applyFont definition"
-    assert 'font-size-adjust: 0.66' in js, "Missing Terraria font-size-adjust: 0.66"
-    assert 'font-size-adjust: 0.55' in js, "Missing Minecraft font-size-adjust: 0.55"
-    assert 'font-size-adjust: 0.50' in js, "Missing Press Start 2P font-size-adjust: 0.50"
-    assert 'font-size-adjust: 0.85' in js, "Missing VT323 font-size-adjust: 0.85"
-    assert 'font-size-adjust: 0.75' in js, "Missing Uncut Sans font-size-adjust: 0.75"
-    assert 'font-size-adjust: 0.72' in js, "Missing JetBrains Mono font-size-adjust: 0.72"
-    assert '* {' in js, "Missing universal wildcard selector * {"
-    assert '!important' in js, "Missing !important enforcement"
-    print("  [+] All 6 fonts handled with appropriate scale adjustments and universal * selector")
+    select = re.search(r'id="opt-font-family"[^>]*>(.*?)</select>', js, re.DOTALL).group(1)
+    choices = set(re.findall(r'<option value="([^"]+)"', select))
+    assert choices == {"Terraria", "Minecraft", "NewYear", "Halloween", "Cyberpunk", "Arcade", "KellySlab", "JetBrains", "Original"}
+    # Actual enable/disable, family, effects and both scales are exercised by
+    # desktop-settings/behavior.js; obsolete font-size-adjust strings are not a contract.
+    assert 'font-changer/sizeScale' in js and 'font-changer/modalSizeScale' in js
+    print("  [+] Current font choices and independent scale keys retained")
     print("-> Step 3 PASSED!")
 
     print("\n" + "=" * 60)
