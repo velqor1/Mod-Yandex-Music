@@ -4,7 +4,7 @@
 
 ## Установка
 
-Скачайте один из файлов в [релизе Fedora 0.3.0](https://github.com/velqor1/Mod-Yandex-Music/releases/tag/fedora-v0.3.0).
+Скачайте один из файлов в [общем релизе](https://github.com/velqor1/Mod-Yandex-Music/releases/tag/release-2026.11.19).
 
 - **RPM.** Выполните `sudo dnf install ./yandex-music-mod-0.3.0-1.fc45.x86_64.rpm`. Откройте «Яндекс Музыка Mod» из списка приложений или запустите `yandex-music-mod`. Обновление сохраняет профиль RPM в `~/.config/yandex-music-mod` при стандартных настройках XDG.
 - **Портативный архив.** Распакуйте TAR.GZ и запустите `./launch.sh` из папки `YandexMusic-Mod-Fedora`. Для запуска нужны системные библиотеки Electron. При обновлении распакуйте новый архив поверх этой папки, чтобы продолжить пользоваться профилем `.profile`. Старая распакованная копия клиента в `.client` больше не используется.
