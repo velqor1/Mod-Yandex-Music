@@ -143,23 +143,6 @@ body.am-body {
   text-overflow: ellipsis;
 }
 
-.am-badge-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 1px;
-}
-
-.am-lossless-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 10.5px;
-  font-weight: 600;
-  color: var(--am-text-tertiary);
-  letter-spacing: 0.1px;
-}
-
 /* Window Controls (macOS Style) */
 .am-win-controls {
   display: flex;
@@ -678,4 +661,27 @@ body.am-body {
 
 .hidden {
   display: none !important;
+}
+
+.am-cover-wrap {
+  border: 0;
+  background: transparent;
+}
+
+.am-body button[hidden] {
+  display: none !important;
+}
+
+.am-body button:focus-visible,
+.am-body [role="slider"]:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .am-body *, .am-body *::before, .am-body *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
 }

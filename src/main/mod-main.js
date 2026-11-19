@@ -2,7 +2,8 @@ function modLog(...args) {
   try {
     console.log("[Mod Main]", ...args);
     const fs = require("fs");
-    const logPath = "C:\\Users\\denbi\\AppData\\Roaming\\YandexMusic\\mod_debug.log";
+    const { app } = require("electron");
+    const logPath = require("path").join(app.getPath("userData"), "mod_debug.log");
     const ts = new Date().toISOString().substring(11, 19);
     fs.appendFileSync(logPath, `[${ts}] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')}\n`);
   } catch(e){}
@@ -97,6 +98,10 @@ const { DiscordRPC } = require("./discord-rpc");
 
 let settingsManager = null;
 let discordRPC = null;
+const isLinux = process.platform === "linux";
+const ozone = app.commandLine.getSwitchValue("ozone-platform");
+const nativeWayland = isLinux && (ozone === "wayland" ||
+  (ozone !== "x11" && Boolean(process.env.WAYLAND_DISPLAY)));
 let overlayWindow = null;
 let karaokeWindow = null;
 let lastPlayerState = null;
@@ -222,7 +227,7 @@ function initModMain() {
 
   // 2. Setup IPC Handlers
   setupIpcHandlers();
-  require('./updater-ipc').setupModUpdater({app,ipcMain,BrowserWindow,settings:settingsManager,
+  if (!isLinux) require('./updater-ipc').setupModUpdater({app,ipcMain,BrowserWindow,settings:settingsManager,
     isAuxiliary: win => win === overlayWindow || win === karaokeWindow || win === vsthemesWindow || (activeDownloadWorkers && activeDownloadWorkers.has(win))});
   startPlayerStatePolling();
 
@@ -387,7 +392,8 @@ function initModMain() {
 }
 
 function onAppReady() {
-  registerGlobalShortcuts();
+  if (!nativeWayland) registerGlobalShortcuts();
+  if (isLinux) app.once("will-quit", () => globalShortcut.unregisterAll());
   try {
     ensureWallpaperDownloadListener();
   } catch (e) {}
@@ -400,6 +406,11 @@ function registerGlobalShortcuts() {
     globalShortcut.register(overlayHotkey, () => {
       toggleOverlayWindow();
     });
+
+    if (isLinux) {
+      globalShortcut.register("CommandOrControl+Shift+G", toggleOverlayGhostMode);
+      return;
+    }
 
     // Karaoke toggle hotkey
     const karaokeHotkey = settingsManager.get("karaoke/hotkey", "CommandOrControl+Shift+L");
@@ -457,11 +468,11 @@ function getOrCreateOverlayWindow() {
   }
 
   const primaryDisplay = screen.getPrimaryDisplay();
-  const { width } = primaryDisplay.workAreaSize;
+  const workArea = primaryDisplay.workArea;
   const overlayWidth = 380;
   const overlayHeight = 160;
-  const posX = width - overlayWidth - 30;
-  const posY = 40;
+  const posX = workArea.x + Math.max(0, workArea.width - overlayWidth - 30);
+  const posY = workArea.y + 40;
 
   const preloadScript = resolvePreloadPath("overlay-preload.js");
 
@@ -474,30 +485,34 @@ function getOrCreateOverlayWindow() {
     transparent: true,
     alwaysOnTop: true,
     skipTaskbar: true,
-    resizable: true,
+    resizable: !isLinux || nativeWayland,
     hasShadow: false,
     show: false,
     backgroundColor: "#00000000",
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: false,
+      sandbox: isLinux,
       preload: preloadScript,
     },
   });
 
-  overlayWindow.setAlwaysOnTop(true, "screen-saver");
-  overlayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  const win = overlayWindow;
+  if (!nativeWayland) {
+    win.setAlwaysOnTop(true, "screen-saver");
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  }
+  const clickThrough = !nativeWayland && settingsManager.get("overlay/clickThrough", false);
+  if (clickThrough) win.setIgnoreMouseEvents(true, { forward: !isLinux });
 
-  const clickThrough = settingsManager.get("overlay/clickThrough", false);
-  if (clickThrough) {
-    overlayWindow.setIgnoreMouseEvents(true, { forward: true });
+  if (isLinux) {
+    win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+    win.webContents.on("will-navigate", event => event.preventDefault());
   }
 
-  // Load overlay.html via standard music-application protocol
-  overlayWindow.loadURL("music-application://desktop/yandexMusicMod/overlay.html");
-
-  overlayWindow.webContents.on("did-finish-load", () => {
+  win.webContents.on("did-finish-load", () => {
+    win.webContents.send("overlay:ghostModeToggled", clickThrough);
+    if (nativeWayland) win.webContents.send("overlay:clickThroughUnavailable");
     if (lastPlayerState) {
       try {
         overlayWindow.webContents.send("overlay:trackUpdate", lastPlayerState);
@@ -510,11 +525,17 @@ function getOrCreateOverlayWindow() {
     }
   });
 
-  overlayWindow.on("closed", () => {
+  win.on("closed", () => {
     overlayWindow = null;
   });
-
-  return overlayWindow;
+  const load = isLinux
+    ? win.loadFile(path.join(__dirname, "overlay.html"))
+    : win.loadURL("music-application://desktop/yandexMusicMod/overlay.html");
+  load.catch(error => {
+    console.error("[Mod Main] HUD failed to load", error);
+    if (!win.isDestroyed()) win.destroy();
+  });
+  return win;
 }
 
 function toggleOverlayWindow() {
@@ -522,7 +543,8 @@ function toggleOverlayWindow() {
   if (win.isVisible()) {
     win.hide();
   } else {
-    win.show();
+    if (isLinux && !nativeWayland) win.showInactive();
+    else win.show();
     if (lastPlayerState) {
       try {
         win.webContents.send("overlay:trackUpdate", lastPlayerState);
@@ -537,14 +559,15 @@ function toggleOverlayWindow() {
 }
 
 function toggleOverlayGhostMode() {
-  const current = settingsManager.get("overlay/clickThrough", false);
-  const updated = !current;
-  settingsManager.set("overlay/clickThrough", updated);
+  setOverlayClickThrough(!settingsManager.get("overlay/clickThrough", false));
+}
+
+function setOverlayClickThrough(enabled) {
+  if (nativeWayland) return;
+  settingsManager.set("overlay/clickThrough", enabled);
   if (overlayWindow && !overlayWindow.isDestroyed()) {
-    overlayWindow.setIgnoreMouseEvents(updated, { forward: true });
-    try {
-      overlayWindow.webContents.send("overlay:ghostModeToggled", updated);
-    } catch (e) {}
+    overlayWindow.setIgnoreMouseEvents(enabled, { forward: !isLinux });
+    overlayWindow.webContents.send("overlay:ghostModeToggled", enabled);
   }
 }
 
@@ -1803,6 +1826,10 @@ function setupIpcHandlers() {
     openSettingsInMainWindow();
   });
 
+  ipcMain.on("yandexMusicMod.isNativeWayland", event => {
+    event.returnValue = nativeWayland;
+  });
+
   // Overlay Windows Controls
   ipcMain.on("yandexMusicMod.toggleOverlay", () => {
     toggleOverlayWindow();
@@ -1813,15 +1840,12 @@ function setupIpcHandlers() {
   });
 
   ipcMain.on("yandexMusicMod.setOverlayClickThrough", (_ev, enabled) => {
-    settingsManager.set("overlay/clickThrough", !!enabled);
-    if (overlayWindow && !overlayWindow.isDestroyed()) {
-      overlayWindow.setIgnoreMouseEvents(!!enabled, { forward: true });
-    }
+    setOverlayClickThrough(!!enabled);
   });
 
   ipcMain.on("yandexMusicMod.setOverlayIgnoreMouseEvents", (_ev, ignore, forward) => {
-    if (overlayWindow && !overlayWindow.isDestroyed()) {
-      overlayWindow.setIgnoreMouseEvents(!!ignore, { forward: forward !== false });
+    if (!nativeWayland && overlayWindow && !overlayWindow.isDestroyed()) {
+      overlayWindow.setIgnoreMouseEvents(!!ignore, { forward: !isLinux && forward !== false });
     }
   });
 
@@ -1836,6 +1860,14 @@ function setupIpcHandlers() {
 
   // Action executed from Overlay -> forward to Main App Window (deduplicated: executePlayerAction only)
   ipcMain.on("yandexMusicMod.overlayAction", (_ev, action, payload) => {
+    if (isLinux) {
+      if (![overlayWindow?.webContents, karaokeWindow?.webContents].includes(_ev.sender)) return;
+      const player = BrowserWindow.getAllWindows().find(win =>
+        !win.isDestroyed() && win !== karaokeWindow &&
+        win.webContents.getURL().startsWith("music-application://desktop/"));
+      player?.webContents.send("yandexMusicMod.executePlayerAction", action, payload);
+      return;
+    }
     BrowserWindow.getAllWindows().forEach((win) => {
       if (win !== overlayWindow && win !== karaokeWindow && !win.isDestroyed()) {
         try {

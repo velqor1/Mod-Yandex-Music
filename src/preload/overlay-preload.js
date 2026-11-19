@@ -23,6 +23,9 @@ contextBridge.exposeInMainWorld("overlayApi", {
   setIgnoreMouseEvents: (ignore, forward) => {
     ipcRenderer.send("yandexMusicMod.setOverlayIgnoreMouseEvents", ignore, forward);
   },
+  onClickThroughUnavailable: (callback) => {
+    ipcRenderer.once("overlay:clickThroughUnavailable", () => callback());
+  },
   onGhostModeToggled: (callback) => {
     const listener = (_e, enabled) => callback(enabled);
     ipcRenderer.on("overlay:ghostModeToggled", listener);

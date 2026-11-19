@@ -116,7 +116,7 @@
     }
 
     electron.contextBridge.exposeInMainWorld("yandexMusicMod", {
-      updater: {
+      updater: navigator.platform.includes("Linux") ? undefined : {
         state: () => electron.ipcRenderer.invoke('yandexMusicMod.updater.state'),
         ready: () => electron.ipcRenderer.invoke('yandexMusicMod.updater.ready'),
         check: () => electron.ipcRenderer.invoke('yandexMusicMod.updater.check'),
@@ -148,6 +148,7 @@
         electron.ipcRenderer.on("yandexMusicMod.executePlayerAction", listener);
         return () => electron.ipcRenderer.removeListener("yandexMusicMod.executePlayerAction", listener);
       },
+      isNativeWayland: () => electron.ipcRenderer.sendSync("yandexMusicMod.isNativeWayland"),
       toggleOverlay: () => electron.ipcRenderer.send("yandexMusicMod.toggleOverlay"),
       toggleKaraoke: () => electron.ipcRenderer.send("yandexMusicMod.toggleKaraoke"),
       setOverlayClickThrough: (enabled) => electron.ipcRenderer.send("yandexMusicMod.setOverlayClickThrough", enabled),

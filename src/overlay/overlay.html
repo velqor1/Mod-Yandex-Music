@@ -10,33 +10,25 @@
     <!-- MiniPlayer Header / Top Bar (Draggable) -->
     <div class="am-header" id="am-header">
       <!-- Left: Album Artwork -->
-      <div class="am-cover-wrap no-drag" id="am-cover-wrap" title="Нажмите для переключения режима обложки">
-        <img id="am-cover" class="am-cover" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23222533'/><text x='50' y='55' font-size='32' text-anchor='middle' fill='%23666'>♫</text></svg>" alt="Cover" />
+      <button type="button" class="am-cover-wrap no-drag" id="am-cover-wrap" title="Нажмите для переключения режима обложки">
+        <img id="am-cover" class="am-cover" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23222533'/><text x='50' y='55' font-size='32' text-anchor='middle' fill='%23666'>♫</text></svg>" alt="" />
         <div class="am-pip-badge" id="am-pip-badge" title="Режим обложки">
           <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="2" y="3" width="20" height="14" rx="2"/>
             <rect x="12" y="9" width="8" height="6" rx="1" fill="currentColor"/>
           </svg>
         </div>
-      </div>
+      </button>
 
-      <!-- Center: Track Title, Artist - Album, Lossless badge -->
+      <!-- Center: Track Title, Artist - Album -->
       <div class="am-meta">
         <div class="am-title" id="am-title">Трек не воспроизводится</div>
         <div class="am-artist" id="am-artist">Яндекс Музыка</div>
-        <div class="am-badge-row">
-          <div class="am-lossless-badge">
-            <svg width="12" height="8" viewBox="0 0 14 10" fill="none" stroke="currentColor" stroke-width="1.5">
-              <path d="M1 5c1-3 2-3 3 0s2 3 3 0 2-3 3 0 2 3 3 0"/>
-            </svg>
-            <span>Lossless</span>
-          </div>
-        </div>
       </div>
 
       <!-- Right: Window Controls (macOS style — ⤢ ✕) -->
       <div class="am-win-controls no-drag">
-        <button class="am-win-btn am-btn-ghost" id="btn-ghost" title="Режим сквозного клика (Ghost / Click-through)">
+        <button class="am-win-btn am-btn-ghost" id="btn-ghost" title="Сквозные клики (Ctrl+Shift+G)" aria-pressed="false">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8">
             <path d="M9 18h6m-3-15a6 6 0 00-6 6c0 3.5 2 6 2 9 0 1 .5 2 2 2h4c1.5 0 2-1 2-2 0-3 2-5.5 2-9a6 6 0 00-6-6z"/>
           </svg>
@@ -62,7 +54,7 @@
     <!-- Scrubber Bar (Interactive Apple Music Slider) -->
     <div class="am-scrubber-section no-drag" id="am-scrubber-section">
       <span class="am-time am-time-current" id="am-time-current">0:00</span>
-      <div class="am-slider-track" id="am-slider-track">
+      <div class="am-slider-track" id="am-slider-track" role="slider" tabindex="0" aria-label="Позиция трека" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
         <div class="am-slider-fill" id="am-slider-fill"></div>
         <div class="am-slider-thumb" id="am-slider-thumb"></div>
       </div>
@@ -91,7 +83,7 @@
 
     <!-- Large Artwork View (Artwork Mode) -->
     <div class="am-artwork-view no-drag hidden" id="am-artwork-view">
-      <img id="am-large-art" class="am-large-art" src="" alt="Album Art" />
+      <img id="am-large-art" class="am-large-art" src="" alt="Обложка альбома" />
     </div>
 
     <!-- Bottom Controls Bar (Fixed at bottom) -->

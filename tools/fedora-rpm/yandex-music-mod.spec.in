@@ -1,0 +1,44 @@
+%global debug_package %{nil}
+# Preserve the shipped Electron binaries and application resources byte for byte.
+%global __os_install_post %{nil}
+# Bundled FFmpeg is resolved relative to the executable.
+%global __requires_exclude ^libffmpeg[.]so
+
+Name:           yandex-music-mod
+Version:        @MOD_VERSION@
+Release:        1%{?dist}
+Summary:        Yandex Music desktop client with a floating player for Fedora
+License:        LicenseRef-Proprietary AND MIT AND LicenseRef-Chromium-Third-Party
+Source0:        @PAYLOAD@
+ExclusiveArch:  x86_64
+AutoProv:       no
+BuildRequires:  desktop-file-utils
+# Electron uses these libraries and tools at runtime without linking them directly.
+Requires:       libnotify
+Requires:       libsecret
+Requires:       libXScrnSaver
+Requires:       libXtst
+Requires:       libuuid
+Requires:       xdg-utils
+
+%description
+The original Yandex Music Linux client @BASE_VERSION@ with the project's
+floating HUD, appearance and font settings, packaged for Fedora x86_64.
+
+%prep
+%setup -q -c -n %{name}-%{version}
+
+%install
+mkdir -p %{buildroot}
+cp -a opt usr %{buildroot}/
+desktop-file-validate %{buildroot}%{_datadir}/applications/%{name}.desktop
+
+%files
+/opt/%{name}
+%{_bindir}/%{name}
+%{_datadir}/applications/%{name}.desktop
+%{_datadir}/icons/hicolor/*/apps/%{name}.png
+
+%changelog
+* Thu Nov 19 2026 Yandex Music Mod - 0.3.0-1
+- Package the original Linux client and mod settings for Fedora.

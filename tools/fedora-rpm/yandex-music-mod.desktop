@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Yandex Music Mod
+Name[ru]=Яндекс Музыка Mod
+Comment=Yandex Music with appearance and font settings
+Comment[ru]=Яндекс Музыка с настройками оформления и шрифтов
+Exec=yandex-music-mod %u
+TryExec=yandex-music-mod
+Icon=yandex-music-mod
+Terminal=false
+StartupWMClass=YandexMusic
+Categories=AudioVideo;Audio;Player;
+MimeType=x-scheme-handler/yandexmusic;

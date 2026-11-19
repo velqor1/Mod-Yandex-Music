@@ -87,6 +87,18 @@ let isDraggingVol = false;
 let optimisticLikeUntil = 0;
 let ignoreBackendVolumeUntil = 0;
 
+const coverPlaceholder = amCover?.getAttribute("src");
+const coverImages = [amCover, amLargeArt].filter(Boolean);
+const coverFailures = new Set();
+for (const image of coverImages) {
+  image.addEventListener("error", () => {
+    if (image.getAttribute("src") === coverPlaceholder) return;
+    coverFailures.add(image.src);
+    for (const cover of coverImages) cover.src = coverPlaceholder;
+  });
+  image.src = coverPlaceholder;
+}
+
 function normalizeCoverUrl(url) {
   if (!url || typeof url !== "string") return "";
   let clean = url.trim();
@@ -370,6 +382,10 @@ function escapeHtml(text) {
 }
 
 function renderProgress(pos) {
+  if (sliderTrack) {
+    sliderTrack.setAttribute("aria-valuemax", String(Math.floor(trackDuration)));
+    sliderTrack.setAttribute("aria-valuenow", String(Math.floor(Math.min(pos, trackDuration))));
+  }
   if (timeCurrent) timeCurrent.textContent = formatTime(pos);
   if (timeRemaining) timeRemaining.textContent = formatRemainingTime(pos, trackDuration);
 
@@ -690,9 +706,9 @@ function updateUI(state) {
     const rawCover = track.coverUrl || track.coverUri || (track.ogImage ? "https://" + track.ogImage.replace("%%", "400x400") : "");
     const coverUrl = normalizeCoverUrl(rawCover);
 
-    if (coverUrl) {
-      if (amCover && amCover.src !== coverUrl) amCover.src = coverUrl;
-      if (amLargeArt && amLargeArt.src !== coverUrl) amLargeArt.src = coverUrl;
+    const cover = coverUrl && !coverFailures.has(coverUrl) ? coverUrl : coverPlaceholder;
+    for (const image of coverImages) {
+      if (image.getAttribute("src") !== cover) image.src = cover;
     }
 
         if (btnLike) {
@@ -767,10 +783,10 @@ function updateUI(state) {
 if (sliderTrack) {
   let isDraggingScrubber = false;
 
-  const seekFromEvent = (e) => {
-    const rect = sliderTrack.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min((e.clientX - rect.left) / rect.width, 1));
-    const targetPos = ratio * trackDuration;
+  const seekTo = (position) => {
+    if (trackDuration <= 0) return;
+    const targetPos = Math.max(0, Math.min(position, trackDuration));
+    const ratio = targetPos / trackDuration;
     basePosition = targetPos;
     baseTimestamp = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
     renderProgress(targetPos);
@@ -782,6 +798,23 @@ if (sliderTrack) {
       }
     }
   };
+
+  const seekFromEvent = (e) => {
+    const rect = sliderTrack.getBoundingClientRect();
+    if (rect.width > 0) seekTo((e.clientX - rect.left) / rect.width * trackDuration);
+  };
+
+  sliderTrack.addEventListener("keydown", (e) => {
+    const current = getInterpolatedPosition();
+    const positions = {
+      ArrowLeft: current - 5, ArrowDown: current - 5,
+      ArrowRight: current + 5, ArrowUp: current + 5,
+      Home: 0, End: trackDuration,
+    };
+    if (!Object.hasOwn(positions, e.key)) return;
+    e.preventDefault();
+    seekTo(positions[e.key]);
+  });
 
   sliderTrack.addEventListener("mousedown", (e) => {
     isDraggingScrubber = true;
@@ -1007,6 +1040,11 @@ if (btnDislike) {
 }
 
 if (btnVol) {
+  btnVol.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    e.preventDefault();
+    setVolumeAction(currentVolume + (e.key === "ArrowUp" ? 0.05 : -0.05));
+  });
   btnVol.addEventListener("click", (e) => {
     e.stopPropagation();
     if (amVolPopup && amVolPopup.contains(e.target)) return;
@@ -1019,11 +1057,11 @@ if (btnVol) {
 }
 
 // Close volume popup on outside click
-document.addEventListener("click", (e) => {
-  if (amVolWrapper && !amVolWrapper.contains(e.target)) {
-    hideOverlayVolumePopup();
-  }
-});
+if (isBrowser) {
+  document.addEventListener("click", (e) => {
+    if (amVolWrapper && !amVolWrapper.contains(e.target)) hideOverlayVolumePopup();
+  });
+}
 
 // Window & View Mode Controls
 if (btnLyricsToggle) {
@@ -1078,6 +1116,7 @@ if (btnGhost) {
   btnGhost.addEventListener("click", () => {
     isGhostMode = !isGhostMode;
     btnGhost.classList.toggle("active", isGhostMode);
+    btnGhost.setAttribute("aria-pressed", String(isGhostMode));
     if (window.overlayApi && window.overlayApi.setClickThrough) {
       window.overlayApi.setClickThrough(isGhostMode);
     }
@@ -1104,7 +1143,14 @@ if (typeof window !== "undefined" && window.overlayApi) {
 
   window.overlayApi.onGhostModeToggled((enabled) => {
     isGhostMode = !!enabled;
-    if (btnGhost) btnGhost.classList.toggle("active", isGhostMode);
+    if (btnGhost) {
+      btnGhost.classList.toggle("active", isGhostMode);
+      btnGhost.setAttribute("aria-pressed", String(isGhostMode));
+    }
+  });
+
+  window.overlayApi.onClickThroughUnavailable?.(() => {
+    if (btnGhost) btnGhost.hidden = true;
   });
 
   // Hydrate immediately
@@ -1140,7 +1186,10 @@ if (btnSyncReset) {
 if (isBrowser) {
   window.addEventListener("keydown", (e) => {
     if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
-    if (e.key === "[" || e.code === "BracketLeft") {
+    if (e.key === "Escape" || (!e.repeat && e.ctrlKey && e.shiftKey && e.code === "KeyO")) {
+      e.preventDefault();
+      window.overlayApi?.toggleOverlay();
+    } else if (e.key === "[" || e.code === "BracketLeft") {
       adjustOffset(-0.5);
     } else if (e.key === "]" || e.code === "BracketRight") {
       adjustOffset(0.5);

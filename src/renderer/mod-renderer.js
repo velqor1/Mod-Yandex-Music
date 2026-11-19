@@ -443,6 +443,15 @@ const BUILTIN_SYNCED_LYRICS = {
 
   // ==========================================
 
+  const fedoraBuild = document.currentScript?.dataset.fedoraModVersion;
+  if (fedoraBuild) {
+    window.yandexMusicMod?.onStorageChanged?.((key, value) => {
+      if (key !== "overlay/clickThrough") return;
+      modSettings[key] = value;
+      const checkbox = document.getElementById("opt-overlay-ghost");
+      if (checkbox && !checkbox.disabled) checkbox.checked = Boolean(value);
+    });
+  }
   const originalFetch = window.fetch;
 
   let modSettings = {};
@@ -665,7 +674,7 @@ const BUILTIN_SYNCED_LYRICS = {
 
 
 
-  window.fetch = async function (...args) {
+  if (!fedoraBuild) window.fetch = async function (...args) {
 
     const request = args[0];
 
@@ -2924,6 +2933,7 @@ const BUILTIN_SYNCED_LYRICS = {
   // Inject Dedicated Mini-Player Button into Yandex Music Playerbar
     // Unwanted playerbar buttons neutralized
   function injectPlayerDownloadButton() {
+    if (fedoraBuild) return;
     const el = document.getElementById("ym-btn-player-download");
     if (el) el.remove();
   }
@@ -3768,7 +3778,7 @@ const BUILTIN_SYNCED_LYRICS = {
     // ==========================================
   // v1.3.2: AUTO-UPDATER & COMMUNITY STATS
   // ==========================================
-  let currentModVersion = '';
+  let currentModVersion = fedoraBuild || '';
   let modUpdateState = null;
   let updateBridgeStarted = false;
   function updateVersionLabels() {
@@ -3777,6 +3787,7 @@ const BUILTIN_SYNCED_LYRICS = {
     const logo = document.querySelector('#ym-mod-modal .ym-modal-logo'); if (logo) logo.title = 'Версия ' + currentModVersion;
   }
   function initModUpdates() {
+    if (fedoraBuild) return;
     const api = window.yandexMusicMod?.updater; if (!api) return;
     if (!updateBridgeStarted) {
       updateBridgeStarted = true;
@@ -5663,7 +5674,7 @@ const BUILTIN_SYNCED_LYRICS = {
     panes.forEach(p=>{p.setAttribute('role','region');p.setAttribute('aria-labelledby','ym-glass-page-title');});
     nav.addEventListener('keydown',e=>{const visible=buttons.filter(b=>!b.hidden),i=visible.indexOf(document.activeElement);if(i<0||!['ArrowUp','ArrowDown','Home','End'].includes(e.key))return;e.preventDefault();const n=e.key==='Home'?0:e.key==='End'?visible.length-1:(i+(e.key==='ArrowUp'?-1:1)+visible.length)%visible.length;visible[n].focus();});
     const normalize=t=>t.toLocaleLowerCase('ru').replace(/ё/g,'е').trim();
-    const entries=[...modal.querySelectorAll('.ym-row')].map(row=>({row,pane:row.closest('.ym-tab-pane'),title:row.querySelector('.ym-label')?.textContent.trim(),detail:row.querySelector('.ym-desc')?.textContent.trim()||''})).filter(x=>x.title&&x.pane);
+    const entries=[...modal.querySelectorAll('.ym-row')].map(row=>({row,pane:row.closest('.ym-tab-pane'),title:row.querySelector('.ym-label')?.textContent.trim(),detail:row.querySelector('.ym-desc')?.textContent.trim()||''})).filter(x=>x.title&&x.pane&&!x.row.closest('[data-fedora-unavailable]'));
     search.addEventListener('input',()=>{
       const q=normalize(search.value);if(!q){select(currentPane,currentSubsection);return;}
       nav.hidden=true;modal.querySelector('.ym-glass-settings').hidden=false;modal.dataset.page='search';panes.forEach(p=>p.hidden=true);subnav.hidden=true;results.hidden=false;results.replaceChildren();modal.querySelector('#ym-glass-page-title').textContent='Результаты поиска';
@@ -6589,7 +6600,7 @@ const BUILTIN_SYNCED_LYRICS = {
 
                     <span class="ym-label">Включить оверлей</span>
 
-                    <span class="ym-desc">Плавающий прозрачный HUD поверх всех игр и полноэкранных окон</span>
+                    <span class="ym-desc">${fedoraBuild ? "Плавающее окно с обложкой и управлением плеером" : "Плавающий прозрачный HUD поверх всех игр и полноэкранных окон"}</span>
 
                   </div>
 
@@ -6675,7 +6686,7 @@ const BUILTIN_SYNCED_LYRICS = {
 
                     <span class="ym-label">Горячая клавиша скрытия</span>
 
-                    <span class="ym-desc">Быстро скрыть или показать HUD в игре</span>
+                    <span class="ym-desc">${fedoraBuild ? "Глобально в X11, внутри плеера в Wayland" : "Быстро скрыть или показать HUD в игре"}</span>
 
                   </div>
 
@@ -7713,8 +7724,7 @@ const BUILTIN_SYNCED_LYRICS = {
 
       optOverlayGhost.addEventListener("change", () => {
 
-        saveSetting("overlay/clickThrough", optOverlayGhost.checked);
-
+        if (!fedoraBuild) saveSetting("overlay/clickThrough", optOverlayGhost.checked);
         if (window.yandexMusicMod && window.yandexMusicMod.setOverlayClickThrough) {
 
           window.yandexMusicMod.setOverlayClickThrough(optOverlayGhost.checked);
@@ -7792,6 +7802,21 @@ const BUILTIN_SYNCED_LYRICS = {
     });
 
 
+
+    if (fedoraBuild) {
+      const updateCard = document.getElementById("btn-check-mod-update").closest(".ym-card");
+      updateCard.hidden = true;
+      updateCard.dataset.fedoraUnavailable = "";
+      const description = document.querySelector(".ym-about-description");
+      description.textContent = "Яндекс Музыка Mod для Fedora x86_64. Обновления устанавливаются вручную.";
+      const nativeWayland = window.yandexMusicMod?.isNativeWayland?.();
+      if (nativeWayland && optOverlayGhost) {
+        optOverlayGhost.disabled = true;
+        optOverlayGhost.checked = false;
+        optOverlayGhost.closest(".ym-row").querySelector(".ym-desc").textContent =
+          "Сквозные клики доступны в X11";
+      }
+    }
 
     document.getElementById("btn-open-overlay")?.addEventListener("click", () => {
 
@@ -8106,6 +8131,11 @@ const BUILTIN_SYNCED_LYRICS = {
   // Global Hotkeys for opening settings: Ctrl+Shift+S, Ctrl+, F10 and Escape
 
   window.addEventListener("keydown", (e) => {
+    if (fedoraBuild && !e.repeat && e.ctrlKey && e.shiftKey && e.code === "KeyO") {
+      e.preventDefault();
+      window.yandexMusicMod?.toggleOverlay?.();
+      return;
+    }
 
     const isCtrlShiftS = (e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "S" || e.key === "s" || e.code === "KeyS");
 

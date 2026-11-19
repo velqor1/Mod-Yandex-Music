@@ -1,17 +1,19 @@
 # Яндекс Музыка Mod
 
-Оригинальная Яндекс Музыка с дополнительными возможностями для **Windows и Android**. На ПК — полноэкранный плеер, обои, HUD и оформление. На телефоне — нативная навигация и воспроизведение, история, статистика и настройки мода.
+Оригинальная Яндекс Музыка с дополнительными возможностями для **Windows, Fedora Linux и Android**. На ПК — полноэкранный плеер, обои, HUD и оформление. На Fedora доступен плавающий HUD и настройки оформления. На телефоне — нативная навигация и воспроизведение, история, статистика и настройки мода.
 
 <p align="center">
-  <a href="https://github.com/velqor1/Mod-Yandex-Music/releases/latest"><img src="https://img.shields.io/badge/Windows_1.7.4-Скачать_EXE-ff2d3c?style=for-the-badge" alt="Скачать мод для Windows из Releases" /></a>
-  <a href="https://github.com/velqor1/Mod-Yandex-Music/releases/latest"><img src="https://img.shields.io/badge/Android_0.6.4-Скачать_APK-ff2d3c?style=for-the-badge" alt="Скачать мод для Android из Releases" /></a>
+  <a href="https://github.com/velqor1/Mod-Yandex-Music/releases/tag/v1.7.4"><img src="https://img.shields.io/badge/Windows_1.7.4-Скачать_EXE-ff2d3c?style=for-the-badge" alt="Скачать мод для Windows из Releases" /></a>
+  <a href="https://github.com/velqor1/Mod-Yandex-Music/releases/tag/v1.7.4"><img src="https://img.shields.io/badge/Android_0.6.4-Скачать_APK-ff2d3c?style=for-the-badge" alt="Скачать мод для Android из Releases" /></a>
+  <a href="https://github.com/velqor1/Mod-Yandex-Music/releases/tag/fedora-v0.3.0"><img src="https://img.shields.io/badge/Fedora_0.3.0-RPM_и_TAR.GZ-6d9df7?style=for-the-badge" alt="Скачать мод для Fedora" /></a>
 </p>
 
-**[Скачать обе версии из Releases →](https://github.com/velqor1/Mod-Yandex-Music/releases/latest)** · [Что нового](CHANGELOG.md) · [Сообщить об ошибке](https://github.com/velqor1/Mod-Yandex-Music/issues)
+**[Все выпуски →](https://github.com/velqor1/Mod-Yandex-Music/releases)** · [Что нового](CHANGELOG.md) · [Сообщить об ошибке](https://github.com/velqor1/Mod-Yandex-Music/issues)
 
 | Платформа | Версия мода | Базовый клиент | Файл в релизе |
 | --- | --- | --- | --- |
 | Windows x64 | **1.7.4** | 5.124.1 | `YandexMusic-Mod-1.7.4-win-x64.exe` |
+| Fedora x86_64 | **0.3.0** | 5.128.0 | RPM и портативный TAR.GZ |
 | Android | **0.6.4-alpha.1** | 2026.11.1 #171rur | `YandexMusic-Mod-0.6.4.apk` |
 
 ## Windows
@@ -40,7 +42,7 @@
 
 ### Установка и обновление Windows
 
-1. Скачайте **EXE** из [последнего релиза](https://github.com/velqor1/Mod-Yandex-Music/releases/latest).
+1. Скачайте **EXE** из [последнего релиза](https://github.com/velqor1/Mod-Yandex-Music/releases/tag/v1.7.4).
 2. Запустите установщик. Он обновляет установленный клиент в своей папке, сохраняя аккаунт, настройки и пользовательские обои.
 3. Настройки открываются через красный значок мода или `Ctrl + Shift + S`.
 
@@ -56,6 +58,15 @@
 | `Ctrl + Shift + O` | Открыть / свернуть игровой HUD |
 | `Ctrl + Shift + G` | Сквозные клики HUD |
 | `Ctrl + Shift + L` | Показать / скрыть плавающее караоке |
+
+## Fedora Linux
+
+**[Скачать Fedora 0.3.0](https://github.com/velqor1/Mod-Yandex-Music/releases/tag/fedora-v0.3.0)** · [Установка и сборка](docs/desktop/FEDORA_RU.md)
+
+- **Игровой HUD.** Плавающий мини-плеер использует оформление Windows-версии. Доступны управление треками, обложка, прогресс и тексты с таймкодами, когда они доступны.
+- **Горячие клавиши.** В X11 доступны глобальное сочетание `Ctrl + Shift + O` и сквозные клики по `Ctrl + Shift + G`. В Wayland HUD открывается из настроек или тем же сочетанием внутри приложения. Расположением окна и его порядком управляет композитор.
+- **Два формата.** Установите RPM через `dnf` или распакуйте TAR.GZ и запустите `./launch.sh`.
+- **Оформление и шрифты.** Откройте настройки красной кнопкой мода или `Ctrl + Shift + S`.
 
 ## Android
 
@@ -84,7 +95,7 @@
 
 ### Установка и обновление Android
 
-1. Скачайте **APK** из [последнего релиза](https://github.com/velqor1/Mod-Yandex-Music/releases/latest).
+1. Скачайте **APK** из [последнего релиза](https://github.com/velqor1/Mod-Yandex-Music/releases/tag/v1.7.4).
 2. Откройте файл на телефоне и при необходимости разрешите установку из выбранного браузера или файлового менеджера.
 3. Устанавливайте поверх предыдущего мода с той же подписью — аккаунт, настройки и скачанная музыка сохраняются.
 4. На «Моей волне» нажмите красный знак мода. Крестик закрывает настройки, не сбрасывая их.
